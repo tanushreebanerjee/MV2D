@@ -10,11 +10,15 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from mmdet.core import bbox2roi
-from mmdet.models.builder import HEADS
+from mmdet.structures.bbox import bbox2roi
+# from mmdet.models.builder import HEADS
 from .mv2d_head import MV2DHead
 
+from mmdet3d.registry import MODELS as MODELS_3D
+from projects.MV2D.mmdet3d_plugin.models.builder import HEADS
 
+
+# @MODELS_3D.register_module()
 @HEADS.register_module()
 class MV2DSHead(MV2DHead):
     def __init__(self,
@@ -130,6 +134,15 @@ class MV2DSHead(MV2DHead):
         intrinsics, extrinsics = self.get_box_params(proposal_list,
                                                      [img_meta['intrinsics'] for img_meta in img_metas],
                                                      [img_meta['extrinsics'] for img_meta in img_metas])
+        
+        # if rois.shape[1] == 6: (rois = view_id, class, x1, y1, x2, y2)
+        # we need it to be [view_idx, x1, y1, x2, y2]
+        if rois.shape[1] == 6:
+            view_ids = rois[:, 0:1]
+            class_ids = rois[:, 1:2]
+            bboxs = rois[:, 2:]
+            rois = torch.cat([view_ids, bboxs], dim=1)
+        
         bbox_feats = self.bbox_roi_extractor(
             x[:self.bbox_roi_extractor.num_inputs], rois)
 
@@ -254,7 +267,7 @@ class MV2DSHead(MV2DHead):
         proposal_scores = []
         proposal_classes = []
         for i in range(num_imgs):
-            proposal_boxes.append(proposal_list[i][:, :6])
+            proposal_boxes.append(proposal_list[i][:, :4]) # 6
             proposal_scores.append(proposal_list[i][:, 4])
             proposal_classes.append(proposal_list[i][:, 5])
 
@@ -303,3 +316,18 @@ class MV2DSHead(MV2DHead):
                 losses[f'l{layer}.{k}'] = v * lw if 'loss' in k else v
 
         return losses
+
+    def loss(self, x, proposal_list, gt_bboxes_3d, gt_labels_3d, img_metas, **kwargs):
+        """
+        Args:
+            x (list[Tensor]): Multi-level features from the backbone.
+            proposal_list (list[Tensor]): List of region proposals.
+            gt_bboxes_3d (list[BaseInstance3DBoxes]): Ground truth 3D boxes.
+            gt_labels_3d (list[Tensor]): Ground truth labels for 3D boxes.
+            img_metas (list[dict]): Meta information of images.
+            **kwargs: Other arguments.
+
+        Returns:
+            dict: A dictionary of loss components.
+        """
+        return self.forward_train(x, proposal_list, gt_bboxes_3d, gt_labels_3d, img_metas, **kwargs)

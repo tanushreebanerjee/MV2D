@@ -8,11 +8,18 @@ import torch
 import os
 import cv2
 
-from mmdet3d.core import (bbox3d2result, box3d_multiclass_nms)
-from mmdet3d.models.builder import DETECTORS, build_detector, build_head, build_neck
+# from mmdet3d.core import (bbox3d2result, box3d_multiclass_nms)
+from mmdet3d.structures.ops import (bbox3d2result)#, box3d_multiclass_nms)
+from mmdet3d.models import box3d_multiclass_nms
+# from mmdet3d.models.builder import DETECTORS#, build_detector, build_head, build_neck
+# from mmdet.models.builder import DETECTORS
+from projects.MV2D.mmdet3d_plugin.models.builder import DETECTORS
+from mmdet3d.registry import MODELS as MODELS_3D
 from .mv2d import MV2D
 
 
+
+# @MODELS_3D.register_module()
 @DETECTORS.register_module()
 class MV2DT(MV2D):
     def __init__(self,

@@ -6,11 +6,13 @@
 # ------------------------------------------------------------------------
 from .positional_encoding import SinePositionalEncoding3D, LearnedPositionalEncoding3D
 from .petr_transformer import PETRTransformer, PETRDNTransformer, PETRMultiheadAttention, PETRTransformerEncoder, PETRTransformerDecoder
+from .match_cost import IoUCost, BBox3DL1Cost, FocalLossCost
 
 __all__ = [
            'SinePositionalEncoding3D', 'LearnedPositionalEncoding3D',
            'PETRTransformer', 'PETRDNTransformer', 'PETRMultiheadAttention', 
-           'PETRTransformerEncoder', 'PETRTransformerDecoder'
+           'PETRTransformerEncoder', 'PETRTransformerDecoder',
+              'IoUCost', 'BBox3DL1Cost', 'FocalLossCost'
            ]
 
 

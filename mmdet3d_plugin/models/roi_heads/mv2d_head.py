@@ -7,14 +7,17 @@ from torch.nn.utils.rnn import pad_sequence
 
 from mmdet.models.roi_heads.base_roi_head import BaseRoIHead
 from mmdet.models.roi_heads.test_mixins import BBoxTestMixin, MaskTestMixin
-from mmdet.core import bbox2roi
-from mmdet.models.builder import HEADS, build_head, build_roi_extractor
-from mmdet3d_plugin.models.utils.pe import PE
-from mmcv.cnn import ConvModule
+from mmdet.structures.bbox import bbox2roi
+# from mmdet.models.builder import build_head, build_roi_extractor, HEADS
+from projects.MV2D.mmdet3d_plugin.models.utils.pe import PE
+# from mmcv.cnn import ConvModule
 from .utils.box_correlation import BoxCorrelation
 from .utils.query_generator import QueryGenerator
+from mmdet3d.registry import MODELS as MODELS_3D
+from projects.MV2D.mmdet3d_plugin.models.builder import build_head, build_roi_extractor, HEADS
 
 
+# @MODELS_3D.register_module()
 @HEADS.register_module()
 class MV2DHead(BaseRoIHead, BBoxTestMixin, MaskTestMixin):
     def __init__(self,
@@ -248,7 +251,7 @@ class MV2DHead(BaseRoIHead, BBoxTestMixin, MaskTestMixin):
 
     def simple_test(self, x, proposal_list, img_metas, rescale=False):
         assert self.with_bbox, 'Bbox head must be implemented.'
-        assert len(img_metas) // img_metas[0]['num_views'] == 1
+        assert len(img_metas) // img_metas[0].num_views == 1
 
         # position encoding
         pos_enc = self.position_encoding(x, img_metas)
@@ -257,6 +260,21 @@ class MV2DHead(BaseRoIHead, BBoxTestMixin, MaskTestMixin):
         results_from_last = dict()
 
         results_from_last['batch_size'] = len(img_metas) // img_metas[0]['num_views']
+        
+        # proposal_list[0] = torch.Tensor[view_id, x1, y1, x2, y2, score, class]
+        # we need it to be [class, x1, y1, x2, y2]
+        proposal_list_new = []
+        for i in range(len(proposal_list)):
+            rois = proposal_list[i]
+            if rois.shape[1] == 6:
+                # roi_view_inds = rois[:, 0]
+                rois_scores = rois[:, 4]
+                rois_bboxes = rois[:, 0:4]
+                rois_classes = rois[:, 5]
+                rois = torch.cat([rois_classes[:, None], rois_bboxes], dim=1)
+            proposal_list_new.append(rois)
+        proposal_list = proposal_list_new
+        
         results_from_last = self._bbox_forward(x, proposal_list, img_metas)
 
         cls_scores = results_from_last['cls_scores'][-1]

@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from torch.nn.utils.rnn import pad_sequence
 import cv2
 import mmcv
-from mmcv.runner import auto_fp16, force_fp32
+# from mmcv.runner import auto_fp16, force_fp32
 
 
 class BoxCorrelation(nn.Module):

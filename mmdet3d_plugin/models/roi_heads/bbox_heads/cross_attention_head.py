@@ -7,19 +7,41 @@ import torch
 import torch.nn as nn
 import math
 import copy
-from mmdet.models.utils.builder import TRANSFORMER
-from mmcv.runner import BaseModule, auto_fp16, force_fp32
-from mmcv.cnn import Conv2d, Linear, build_activation_layer, bias_init_with_prob
-from mmdet.core import build_bbox_coder, build_assigner, build_sampler, multi_apply, reduce_mean
-from mmdet.models.builder import HEADS, build_loss
-from mmdet.models.utils import build_transformer
-from mmdet.models.utils.transformer import inverse_sigmoid
-from mmdet3d_plugin.core.bbox.util import normalize_bbox
-from mmdet3d_plugin.models.utils.pe import pos2posemb3d
-from mmdet3d_plugin.models.utils import PETRTransformer
+# from mmdet.models.utils.builder import TRANSFORMER
+from mmengine.model.base_module import BaseModule
+from mmdet3d.registry import MODELS as MODELS_3D
+# from mmcv.runner import auto_fp16, force_fp32
+from mmcv.cnn import Conv2d, Linear, build_activation_layer#, bias_init_with_prob
+from mmdet.models.task_modules import build_bbox_coder, build_assigner, build_sampler#, multi_apply, reduce_mean
+from mmdet.models.utils import multi_apply
+from mmdet.utils import reduce_mean
+# from mmdet.models.builder import HEADS, build_loss
+from projects.MV2D.mmdet3d_plugin.models.builder import build_loss
+from mmengine.registry import build_from_cfg
+# from mmdet.models.utils import build_transformer
+from mmdet.models.layers.transformer.utils import inverse_sigmoid
+from projects.MV2D.mmdet3d_plugin.core.bbox.util import normalize_bbox
+from projects.MV2D.mmdet3d_plugin.models.utils.pe import pos2posemb3d
+from projects.MV2D.mmdet3d_plugin.models.utils import PETRTransformer
+# from projects.MV2D.mmdet3d_plugin.models.builder import TRANSFORMER
+# from mmdet.models.utils import build_transformer
+from mmdet3d.registry import Registry
+from mmengine.structures import InstanceData
+# TRANSFORMER = Registry('Transformer')
+def build_transformer(cfg, default_args=None):
+    """Builder for Transformer."""
+    return build_from_cfg(cfg, MODELS_3D, default_args)
 
 
-@TRANSFORMER.register_module()
+
+def bias_init_with_prob(prior_prob):
+    """initialize conv/fc bias value according to giving probablity."""
+    bias_init = float(-np.log((1 - prior_prob) / prior_prob))
+    return bias_init
+
+
+# @TRANSFORMER.register_module()
+@MODELS_3D.register_module()
 class MV2DTransformer(PETRTransformer):
     def forward(self, x, mask, query_embed, pos_embed,
                 attn_mask=None, cross_attn_mask=None, **kwargs):
@@ -83,7 +105,7 @@ class RegLayer(nn.Module):
         return outs
 
 
-@HEADS.register_module()
+@MODELS_3D.register_module()
 class CrossAttentionBoxHead(BaseModule):
     def __init__(self, num_classes, transformer, pc_range, embed_dims=256, num_reg_fcs=2,
                  group_reg_dims=(2, 2, 1, 1, 2, 2), use_reg_layer=False, pre_embed=False,
@@ -275,8 +297,16 @@ class CrossAttentionBoxHead(BaseModule):
         # assigner and sampler
         assign_result = self.assigner.assign(bbox_pred, cls_score, gt_bboxes,
                                              gt_labels, gt_bboxes_ignore)
-        sampling_result = self.sampler.sample(assign_result, bbox_pred,
-                                              gt_bboxes)
+        gt_instances = InstanceData()
+        gt_instances.bboxes_3d = gt_bboxes
+        
+        pred_instances = InstanceData()
+        pred_instances.priors = bbox_pred
+        
+        sampling_result = self.sampler.sample(assign_result, pred_instances, gt_instances)
+        
+        # sampling_result = self.sampler.sample(assign_result, bbox_pred,
+        #                                       gt_bboxes)
         pos_inds = sampling_result.pos_inds
         neg_inds = sampling_result.neg_inds
 
@@ -353,7 +383,7 @@ class CrossAttentionBoxHead(BaseModule):
         return (labels_list, label_weights_list, bbox_targets_list,
                 bbox_weights_list, num_total_pos, num_total_neg)
 
-    @force_fp32(apply_to=('preds_dicts'))
+    # @force_fp32(apply_to=('preds_dicts'))
     def get_bboxes(self, preds_dicts, img_metas, rescale=False):
         """Generate bboxes from bbox head predictions.
         Args:
@@ -376,7 +406,7 @@ class CrossAttentionBoxHead(BaseModule):
             ret_list.append([bboxes, scores, labels])
         return ret_list
 
-    @force_fp32(apply_to=('cls_scores', 'bbox_preds', 'gt_bboxes_list', 'gt_labels_list'))
+    # @force_fp32(apply_to=('cls_scores', 'bbox_preds', 'gt_bboxes_list', 'gt_labels_list'))
     def loss_single(self,
                     cls_scores,
                     bbox_preds,
@@ -472,7 +502,7 @@ class CrossAttentionBoxHead(BaseModule):
         loss_dict['loss_bbox'] = losses_bbox
         return loss_dict
 
-    @force_fp32(apply_to=('cls_scores', 'bbox_preds', 'known_bboxs'))
+    # @force_fp32(apply_to=('cls_scores', 'bbox_preds', 'known_bboxs'))
     def dn_loss_single(self,
                        cls_scores,
                        bbox_preds,

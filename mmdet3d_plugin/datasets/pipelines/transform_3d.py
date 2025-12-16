@@ -11,16 +11,17 @@
 import numpy as np
 from numpy import random
 import mmcv
-from mmdet.datasets.builder import PIPELINES
-from mmdet3d.core.points import BasePoints, get_points_type
-from mmdet3d.core.bbox import (CameraInstance3DBoxes, DepthInstance3DBoxes,
-                               LiDARInstance3DBoxes, box_np_ops)
+# from mmdet.datasets.builder import PIPELINES
+from mmdet3d.structures.points import BasePoints, get_points_type
+from mmdet3d.structures.bbox_3d import (CameraInstance3DBoxes, DepthInstance3DBoxes,
+                               LiDARInstance3DBoxes)
+from mmdet3d.registry import Registry
 import copy
 import inspect
 from operator import methodcaller
 import torch
 import cv2
-from mmdet3d.datasets.pipelines.transforms_3d import ObjectRangeFilter, ObjectNameFilter
+from mmdet3d.datasets.transforms.transforms_3d import ObjectRangeFilter, ObjectNameFilter
 
 try:
     import albumentations
@@ -30,7 +31,7 @@ except ImportError:
     Compose = None
 from PIL import Image
 
-
+PIPELINES = Registry('pipeline')
 @PIPELINES.register_module()
 class ObjectRangeFilterMono(ObjectRangeFilter):
     def __init__(self, with_bbox_2d=False, **kwargs):
@@ -52,7 +53,7 @@ class ObjectRangeFilterMono(ObjectRangeFilter):
         # using mask to index gt_labels_3d will cause bug when
         # len(gt_labels_3d) == 1, where mask=1 will be interpreted
         # as gt_labels_3d[1] and cause out of index error
-        mask_numpy = mask.numpy().astype(np.bool)
+        mask_numpy = mask.numpy().astype(bool)#(np.bool)
         gt_labels_3d = gt_labels_3d[mask_numpy]
 
         # 2d bboxes to 3d bboxes mapping: -1 for not matched to any 3d bbox
@@ -85,7 +86,7 @@ class ObjectNameFilterMono(ObjectNameFilter):
     def __call__(self, input_dict):
         gt_labels_3d = input_dict['gt_labels_3d']
         gt_bboxes_mask = np.array([n in self.labels for n in gt_labels_3d],
-                                  dtype=np.bool_)
+                                  dtype=bool)#np.bool_)
         input_dict['gt_bboxes_3d'] = input_dict['gt_bboxes_3d'][gt_bboxes_mask]
         input_dict['gt_labels_3d'] = input_dict['gt_labels_3d'][gt_bboxes_mask]
 
@@ -102,7 +103,7 @@ class ObjectNameFilterMono(ObjectNameFilter):
             gt_bboxes_2d_to_3d_filtered = []
             for bboxes_2d, labels_2d, bboxes_2d_to_3d in zip(gt_bboxes_2d, gt_labels_2d, gt_bboxes_2d_to_3d):
                 # 1. filter out 2d bboxes
-                mask_2d = np.array([n in self.labels for n in labels_2d], dtype=np.bool_)
+                mask_2d = np.array([n in self.labels for n in labels_2d], dtype=bool)#np.bool_)
                 gt_bboxes_2d_filtered.append(bboxes_2d[mask_2d])
                 gt_labels_2d_filtered.append(labels_2d[mask_2d])
                 bboxes_2d_to_3d_filtered = bboxes_2d_to_3d[mask_2d]
@@ -145,11 +146,12 @@ class PadMultiViewImage(object):
         elif self.size_divisor is not None:
             padded_img = [mmcv.impad_to_multiple(
                 img, self.size_divisor, pad_val=self.pad_val) for img in results['img']]
-        results['img_shape'] = [img.shape for img in results['img']]
+        results['img_shape'] = [img.shape[:2] for img in results['img']]
         results['img'] = padded_img
-        results['pad_shape'] = [img.shape for img in padded_img]
+        results['pad_shape'] = [img.shape[:2] for img in padded_img]
         results['pad_fixed_size'] = self.size
         results['pad_size_divisor'] = self.size_divisor
+        return results
 
     def __call__(self, results):
         """Call function to pad images, masks, semantic segmentation maps.
@@ -158,7 +160,7 @@ class PadMultiViewImage(object):
         Returns:
             dict: Updated result dict.
         """
-        self._pad_img(results)
+        results = self._pad_img(results)
         return results
 
     def __repr__(self):
@@ -587,8 +589,8 @@ class ResizeCropFlipImageMono(ResizeCropFlipImage):
             results['intrinsics'][i][:3, :3] = ida_mat @ results['intrinsics'][i][:3, :3]
 
         results["img"] = new_imgs
-        results['lidar2img'] = [results['intrinsics'][i] @ results['extrinsics'][i].T for i in
-                                range(len(results['extrinsics']))]
+        results['lidar2img'] = [results['intrinsics'][i] @ results['extrinsics'][i] for i in
+                                range(len(results['extrinsics']))] # .T
 
         if self.with_bbox_2d:
             gt_bboxes_2d = results['gt_bboxes_2d']
@@ -668,6 +670,34 @@ class ResizeCropFlipImageMono(ResizeCropFlipImage):
             results['gt_labels_2d'] = processed_gt_labels_2d
             results['gt_bboxes_2d_to_3d'] = processed_gt_bboxes_2d_to_3d
             results['gt_bboxes_ignore'] = processed_gt_bboxes_ignore
+
+            # set scale, scale_idx, img_shape, pad_shape, scale_factor, keep_ratio
+            # resize, resize_dims, crop, flip, rotate = self._sample_augmentation()
+            scale = resize
+            scale_idx = 0 # TODO??
+            img_shapes = []
+            pad_shapes = []
+            scale_factors = []
+            keep_ratios = []
+            for i in range(N):
+                new_h, new_w = resize_dims
+                img_shapes.append((crop[3]-crop[1], crop[2]-crop[0]))
+                pad_shapes.append((crop[3]-crop[1], crop[2]-crop[0]))
+                scale_factor = np.array([scale, scale, scale, scale],
+                                        dtype=np.float32)
+                scale_factors.append(scale_factor)
+                keep_ratios.append(True)
+            results['scale'] = scale
+            results['scale_idx'] = scale_idx
+            results['img_shape'] = img_shapes
+            results['pad_shape'] = pad_shapes
+            results['scale_factor'] = scale_factors
+            results['keep_ratio'] = keep_ratios
+            
+            
+            # set flip
+            results['flip'] = flip
+            
 
         return results
 

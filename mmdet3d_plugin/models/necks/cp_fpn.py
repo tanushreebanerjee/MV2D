@@ -7,10 +7,13 @@
 import torch.nn as nn
 import torch.nn.functional as F
 from mmcv.cnn import ConvModule
-from mmcv.runner import BaseModule, auto_fp16
+# from mmcv.runner import BaseModule#, auto_fp16
+from mmengine.model import BaseModule
 import torch.utils.checkpoint as cp
 
-from mmdet.models import NECKS
+# from mmdet.models import NECKS
+from mmdet.registry import MODELS
+from projects.MV2D.mmdet3d_plugin.models.builder import NECKS
 
 ####This FPN remove the unused parameters which can used with checkpoint (with_cp = True in Backbone)
 @NECKS.register_module()
@@ -192,7 +195,7 @@ class CPFPN(BaseModule):
         else:
             return cp.checkpoint(self._forward, inputs)
 
-    @auto_fp16()
+    # @auto_fp16()
     def _forward(self, inputs):
         if self.used_levels:
             inputs = [inputs[x] for x in self.used_levels]

@@ -8,11 +8,14 @@
 # Copyright (c) OpenMMLab. All rights reserved.
 # ------------------------------------------------------------------------
 import torch
-
-from mmdet.core.bbox import BaseBBoxCoder
-from mmdet.core.bbox.builder import BBOX_CODERS
-from mmdet3d_plugin.core.bbox.util import denormalize_bbox
+from mmdet.models.task_modules.coders import BaseBBoxCoder
+# from mmdet.core.bbox import BaseBBoxCoder
+from mmdet.registry import TASK_UTILS
+# from mmdet.core.bbox.builder import BBOX_CODERS
+from projects.MV2D.mmdet3d_plugin.core.bbox.util import denormalize_bbox
 import torch.nn.functional as F
+
+BBOX_CODERS = TASK_UTILS
 
 @BBOX_CODERS.register_module()
 class NMSFreeCoder(BaseBBoxCoder):

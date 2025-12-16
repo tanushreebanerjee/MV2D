@@ -52,8 +52,15 @@ def normalize_bbox(bboxes, pc_range):
             (cx, cy, w, l, cz, h, rot.sin(), rot.cos(), vx, vy), dim=-1
         )
     else:
+        
+        vx = torch.zeros_like(cx)
+        vy = torch.zeros_like(cx)
+        
+        # normalized_bboxes = torch.cat(
+        #     (cx, cy, w, l, cz, h, rot.sin(), rot.cos()), dim=-1
+        # )
         normalized_bboxes = torch.cat(
-            (cx, cy, w, l, cz, h, rot.sin(), rot.cos()), dim=-1
+            (cx, cy, w, l, cz, h, rot.sin(), rot.cos(), vx, vy), dim=-1
         )
     return normalized_bboxes
 

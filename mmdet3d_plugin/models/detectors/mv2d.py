@@ -8,10 +8,12 @@ import torch
 import os
 import cv2
 
-from mmdet.models.builder import DETECTORS, build_detector, build_head, build_neck
-from mmdet3d.core import (bbox3d2result, box3d_multiclass_nms)
+from projects.MV2D.mmdet3d_plugin.models.builder import build_detector, build_head, build_neck, DETECTORS
+from mmdet3d.registry import MODELS as MODELS_3D
+from mmdet3d.structures.ops import (bbox3d2result)#, box3d_multiclass_nms)
+from mmdet3d.models import box3d_multiclass_nms
 from mmdet3d.models.detectors.base import Base3DDetector
-from mmdet3d_plugin.models.utils.grid_mask import CustomGridMask
+from projects.MV2D.mmdet3d_plugin.models.utils.grid_mask import CustomGridMask
 
 
 @DETECTORS.register_module()

@@ -8,8 +8,13 @@
 # Copyright 2021 Toyota Research Institute.  All rights reserved.
 # ------------------------------------------------------------------------
 from collections import OrderedDict
-from mmcv.runner import BaseModule
-from mmdet.models.builder import BACKBONES
+# from mmcv.runner import BaseModule
+from mmengine.model import BaseModule
+from projects.MV2D.mmdet3d_plugin.models.builder import BACKBONES
+# from mmdet.models.builder import BACKBONES
+from mmengine.registry import MODELS
+from mmdet3d.registry import MODELS as MODELS_3D
+from mmdet.registry import MODELS as MODELS_2D
 import torch
 import torch.nn as nn
 import torch.nn.functional as F

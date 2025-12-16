@@ -12,18 +12,21 @@ import os
 
 import numpy as np
 import torch
-
-from mmdet.core.bbox.builder import BBOX_ASSIGNERS
-from mmdet.core.bbox.assigners import AssignResult
-from mmdet.core.bbox.assigners import BaseAssigner
-from mmdet.core.bbox.match_costs import build_match_cost
-from mmdet.models.utils.transformer import inverse_sigmoid
-from mmdet3d_plugin.core.bbox.util import normalize_bbox
+from mmdet.registry import TASK_UTILS
+# from mmdet.core.bbox.builder import BBOX_ASSIGNERS
+# from mmdet.core.bbox.assigners import AssignResult
+# from mmdet.core.bbox.assigners import BaseAssigner
+# from mmdet.core.bbox.match_costs import build_match_cost
+from mmdet.models.task_modules import build_match_cost, AssignResult, BaseAssigner
+# from mmdet.models.utils.transformer import inverse_sigmoid
+from projects.MV2D.mmdet3d_plugin.core.bbox.util import normalize_bbox
 
 try:
     from scipy.optimize import linear_sum_assignment
 except ImportError:
     linear_sum_assignment = None
+
+BBOX_ASSIGNERS = TASK_UTILS
 
 @BBOX_ASSIGNERS.register_module()
 class HungarianAssigner3D(BaseAssigner):

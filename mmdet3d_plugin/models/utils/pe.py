@@ -15,7 +15,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from mmcv.cnn.bricks.transformer import FFN, build_positional_encoding
-from mmdet.models.utils.transformer import inverse_sigmoid
+from mmdet.models.layers.transformer.utils import inverse_sigmoid
+from mmdet3d.structures.det3d_data_sample import Det3DDataSample
 
 
 def pos2posemb3d(pos, num_pos_feats=128, temperature=10000):
@@ -83,7 +84,10 @@ class PE(nn.Module):
 
     def position_encoding(self, img_feats, img_metas, masks=None):
         eps = 1e-3
-        pad_h, pad_w, _ = img_metas[0]['pad_shape']
+        if len(img_metas[0]['pad_shape']) == 2:
+            pad_h, pad_w = img_metas[0]['pad_shape']
+        else:   
+            pad_h, pad_w, _ = img_metas[0]['pad_shape']
 
         t, C, H, W = img_feats.shape
         N = img_metas[0]['num_views']
@@ -138,7 +142,10 @@ class PE(nn.Module):
         assert len(mlvl_feats) == len(self.strides)
         num_views = img_metas[0]['num_views']
         batch_size = len(img_metas) // num_views
-        input_img_h, input_img_w, _ = img_metas[0]['pad_shape']
+        if len(img_metas[0]['pad_shape']) == 2:
+            input_img_h, input_img_w = img_metas[0]['pad_shape']
+        else:
+            input_img_h, input_img_w, _ = img_metas[0]['pad_shape']
 
         out_feats = []
 
@@ -147,7 +154,10 @@ class PE(nn.Module):
                 (batch_size, num_views, input_img_h, input_img_w))
             for img_id in range(batch_size):
                 for view_id in range(num_views):
-                    img_h, img_w, _ = img_metas[img_id * num_views + view_id]['img_shape']
+                    if len(img_metas[img_id * num_views + view_id]['img_shape']) == 2:
+                        img_h, img_w = img_metas[img_id * num_views + view_id]['img_shape']
+                    else:
+                        img_h, img_w, _ = img_metas[img_id * num_views + view_id]['img_shape']
                     masks[img_id, view_id, :img_h, :img_w] = 0
 
             # interpolate masks to have the same spatial shape with x

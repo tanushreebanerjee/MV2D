@@ -8,8 +8,12 @@ import math
 
 import torch
 import torch.nn as nn
-from mmcv.cnn.bricks.transformer import POSITIONAL_ENCODING
-from mmcv.runner import BaseModule
+# from mmcv.cnn.bricks.transformer import POSITIONAL_ENCODING
+from mmengine.registry import Registry
+# from mmcv.runner import BaseModule
+from mmengine.model import BaseModule
+
+POSITIONAL_ENCODING = Registry('position encoding')
 
 @POSITIONAL_ENCODING.register_module()
 class SinePositionalEncoding3D(BaseModule):

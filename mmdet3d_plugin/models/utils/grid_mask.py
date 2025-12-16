@@ -174,8 +174,10 @@ class CustomGridMask(nn.Module):
             mask = mask.rotate(r)
             mask = np.asarray(mask)
             mask = mask[(hh - h) // 2:(hh - h) // 2 + h, (ww - w) // 2:(ww - w) // 2 + w]
-
-            mask = torch.from_numpy(mask).float().cuda()
+            device = x.device
+            # make mask tensor writable
+            mask = np.copy(mask)
+            mask = torch.from_numpy(mask).float().to(device)
             # mode 0: the grid is masked out
             # mode 1: the
             if self.mode == 1:

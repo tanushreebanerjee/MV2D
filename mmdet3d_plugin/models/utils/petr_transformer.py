@@ -20,20 +20,33 @@ from mmcv.cnn.bricks.transformer import (BaseTransformerLayer,
                                          TransformerLayerSequence,
                                          build_transformer_layer_sequence)
 from mmcv.cnn.bricks.drop import build_dropout
-from mmdet.models.utils.builder import TRANSFORMER
+# from mmdet.models.utils.builder import TRANSFORMER
 from mmcv.cnn import (build_activation_layer, build_conv_layer,
-                      build_norm_layer, xavier_init)
-from mmcv.runner.base_module import BaseModule, ModuleList, Sequential
-from mmcv.cnn.bricks.registry import (ATTENTION, TRANSFORMER_LAYER,
-                                      TRANSFORMER_LAYER_SEQUENCE)
+                      build_norm_layer)#, xavier_init)
+from mmengine.model import xavier_init
+# from mmcv.runner.base_module import BaseModule, ModuleList, Sequential
+from mmengine.model import BaseModule
+# from mmcv.cnn.bricks.registry import (ATTENTION, TRANSFORMER_LAYER,
+#                                       TRANSFORMER_LAYER_SEQUENCE)
+from mmdet3d.registry import Registry
 from mmcv.cnn.bricks.transformer import MultiheadAttention, build_attention
-from mmcv.utils import (ConfigDict, build_from_cfg, deprecated_api_warning,
-                        to_2tuple)
+# from mmcv.utils import (ConfigDict, build_from_cfg, deprecated_api_warning,
+#                         to_2tuple)
+from mmengine.utils.misc import deprecated_api_warning
 import copy
 import torch.utils.checkpoint as cp
 
 
-@TRANSFORMER.register_module()
+ATTENTION = Registry('attention')
+TRANSFORMER_LAYER = Registry('transformerLayer')
+TRANSFORMER_LAYER_SEQUENCE = Registry('transformer-layers sequence')
+
+
+# @TRANSFORMER.register_module()
+from mmdet3d.registry import MODELS as MODELS_3D
+
+# @TRANSFORMER.register_module()
+@MODELS_3D.register_module()
 class PETRTransformer(BaseModule):
     """Implements the DETR transformer.
     Following the official DETR implementation, this module copy-paste
@@ -113,7 +126,8 @@ class PETRTransformer(BaseModule):
         return out_dec, memory
 
 
-@TRANSFORMER.register_module()
+# @TRANSFORMER.register_module()
+@MODELS_3D.register_module()
 class PETRDNTransformer(BaseModule):
     """Implements the DETR transformer.
     Following the official DETR implementation, this module copy-paste

@@ -1,8 +1,11 @@
-from mmdet.core import bbox2result
-from mmdet.models.builder import DETECTORS
+from mmdet.structures.bbox import bbox2result
+# from mmdet.models.builder import DETECTORS
+from projects.MV2D.mmdet3d_plugin.models.builder import DETECTORS
 from mmdet.models.detectors import SingleStageDetector, TwoStageDetector
+from mmdet3d.registry import MODELS as MODELS_3D
 
 
+# @MODELS_3D.register_module()
 @DETECTORS.register_module()
 class SingleStageDetBase(SingleStageDetector):
     def forward_train_w_feat(self,
@@ -30,7 +33,7 @@ class SingleStageDetBase(SingleStageDetector):
         return bbox_results
 
 
-@DETECTORS.register_module()
+@MODELS_3D.register_module()
 class TwoStageDetBase(TwoStageDetector):
     def forward_train_w_feat(self,
                              feat,

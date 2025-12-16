@@ -4,17 +4,62 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from mmcv.cnn import ConvModule
-from mmcv.runner import BaseModule, auto_fp16, force_fp32
+# from mmcv.runner import BaseModule, auto_fp16, force_fp32
+from mmengine.model import BaseModule
 from torch.nn.modules.utils import _pair
 
-from mmdet.core import build_bbox_coder, build_assigner, build_sampler, multi_apply, reduce_mean
-from mmdet.models.losses import accuracy
-from mmdet3d.models.builder import HEADS, build_loss
-from mmdet.models.utils import build_linear_layer
-from mmdet3d_plugin.core.bbox.util import normalize_bbox
+# from mmdet.core import build_bbox_coder, build_assigner, build_sampler, multi_apply, reduce_mean
+# from mmdet.models.losses import accuracy
+# from mmdet3d.models.builder import HEADS, build_loss
+from projects.MV2D.mmdet3d_plugin.models.builder import HEADS
+from mmdet3d.registry import MODELS
+from mmengine.registry import Registry
+
+# from mmdet.models.utils import build_linear_layer
+from projects.MV2D.mmdet3d_plugin.core.bbox.util import normalize_bbox
 import torch.utils.checkpoint as cp
 
 
+
+
+LINEAR_LAYERS = Registry('linear layers')
+
+LINEAR_LAYERS.register_module('Linear', module=nn.Linear)
+
+def build_linear_layer(cfg, *args, **kwargs):
+    """Build linear layer.
+    Args:
+        cfg (None or dict): The linear layer config, which should contain:
+            - type (str): Layer type.
+            - layer args: Args needed to instantiate an linear layer.
+        args (argument list): Arguments passed to the `__init__`
+            method of the corresponding linear layer.
+        kwargs (keyword arguments): Keyword arguments passed to the `__init__`
+            method of the corresponding linear layer.
+    Returns:
+        nn.Module: Created linear layer.
+    """
+    if cfg is None:
+        cfg_ = dict(type='Linear')
+    else:
+        if not isinstance(cfg, dict):
+            raise TypeError('cfg must be a dict')
+        if 'type' not in cfg:
+            raise KeyError('the cfg dict must contain the key "type"')
+        cfg_ = cfg.copy()
+
+    layer_type = cfg_.pop('type')
+    if layer_type not in LINEAR_LAYERS:
+        raise KeyError(f'Unrecognized linear type {layer_type}')
+    else:
+        linear_layer = LINEAR_LAYERS.get(layer_type)
+
+    layer = linear_layer(*args, **kwargs, **cfg_)
+
+    return layer
+
+
+# @MODELS_3D.register_module()
 @HEADS.register_module()
 class QueryGenerator(BaseModule):
     def __init__(self,
@@ -330,7 +375,7 @@ class QueryGenerator(BaseModule):
             x = self.relu(fc(x))
         return x
 
-    @force_fp32(apply_to=('center_pred', ))
+    # @force_fp32(apply_to=('center_pred', ))
     def center2lidar(self, center_pred, intrinsic, extrinsic):
         # [z, z, 1, 1] * pts_img_home.T = intrinsic @ extrinsic.T @ pts_lidar_hom.T
         center_img = torch.cat([center_pred[:, :2] * center_pred[:, 2:3], center_pred[:, 2:3]], dim=1)

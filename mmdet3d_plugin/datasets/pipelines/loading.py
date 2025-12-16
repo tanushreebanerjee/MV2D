@@ -4,10 +4,12 @@
 # ------------------------------------------------------------------------
 import mmcv
 import numpy as np
-from mmdet.datasets.builder import PIPELINES
-from mmdet3d.datasets.pipelines.loading import LoadAnnotations3D
+# from mmdet.datasets.builder import PIPELINES
+from mmdet3d.datasets.transforms.loading import LoadAnnotations3D
 from einops import rearrange
+from mmdet3d.registry import Registry
 
+PIPELINES = Registry('pipeline')
 
 @PIPELINES.register_module()
 class LoadAnnotationsMono3D(LoadAnnotations3D):
@@ -16,11 +18,14 @@ class LoadAnnotationsMono3D(LoadAnnotations3D):
         self.with_bbox_2d = with_bbox_2d
 
     def _load_bboxes_2d(self, results):
-        results['gt_bboxes_2d'] = results['ann_info']['gt_bboxes_2d']
-        results['gt_labels_2d'] = results['ann_info']['gt_labels_2d']
+        results['gt_bboxes_2d'] = results['ann_info']['gt_bboxes']
+        results['gt_labels_2d'] = results['ann_info']['gt_bboxes_labels']
         results['gt_bboxes_2d_to_3d'] = results['ann_info']['gt_bboxes_2d_to_3d']
         results['gt_bboxes_ignore'] = results['ann_info']['gt_bboxes_ignore']
-        results['bbox2d_fields'].append('gt_bboxes_2d')
+        results['centers_2d'] = results['ann_info']['centers_2d']
+        if 'bbox2d_fields' not in results:
+            results['bbox2d_fields'] = []
+        results['bbox2d_fields'].append('gt_bboxes')
         return results
 
     def __call__(self, results):

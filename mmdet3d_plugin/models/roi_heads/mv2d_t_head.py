@@ -10,11 +10,15 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from mmdet.core import bbox2roi
-from mmdet.models.builder import HEADS
+from mmdet.structures.bbox import bbox2roi
+# from mmdet.models.builder import HEADS
 from .mv2d_s_head import MV2DSHead
 
+from mmdet3d.registry import MODELS as MODELS_3D
+from projects.MV2D.mmdet3d_plugin.models.builder import HEADS
 
+
+# @MODELS_3D.register_module()
 @HEADS.register_module()
 class MV2DTHead(MV2DSHead):
     def __init__(self,
