@@ -142,13 +142,13 @@ class MV2DSHead(MV2DHead):
                                                      [img_meta['lidar2img'] for img_meta in img_metas]
                                                      )
         # Debug: optionally emit small diagnostics when `MV2D_DEBUG=1`.
-        if os.environ.get('MV2D_DEBUG') == '1':
-            try:
-                print('MV2D_DEBUG _bbox_forward_denoise: rois.shape=', rois.shape)
-                print('MV2D_DEBUG _bbox_forward_denoise: intrinsics.shape=', intrinsics.shape)
-                print('MV2D_DEBUG _bbox_forward_denoise: lidar2img.shape=', lidar2img.shape)
-            except Exception:
-                pass
+        # if os.environ.get('MV2D_DEBUG') == '1':
+        #     try:
+        #         print('MV2D_DEBUG _bbox_forward_denoise: rois.shape=', rois.shape)
+        #         print('MV2D_DEBUG _bbox_forward_denoise: intrinsics.shape=', intrinsics.shape)
+        #         print('MV2D_DEBUG _bbox_forward_denoise: lidar2img.shape=', lidar2img.shape)
+        #     except Exception:
+        #         pass
         
         # if rois.shape[1] == 6: (rois = view_id, class, x1, y1, x2, y2)
         # we need it to be [view_idx, x1, y1, x2, y2]

@@ -84,14 +84,14 @@ class MV2DHead(BaseRoIHead, BBoxTestMixin, MaskTestMixin):
         # NOTE: intrinsics/extrinsics/lidar2img are converted from numpy->torch
         # and repeated per-roi above. Intrinsics are adjusted for ROI scaling.
         # Debug: optionally print small diagnostics when `MV2D_DEBUG=1`.
-        if os.environ.get('MV2D_DEBUG') == '1':
-            try:
-                print('MV2D_DEBUG get_box_params: intrinsic_list.shape=', intrinsic_list.shape)
-                print('MV2D_DEBUG get_box_params: intrinsics[0]=\n', intrinsic_list[0])
-                print('MV2D_DEBUG get_box_params: extrinsics[0]=\n', extrinsic_list[0])
-                print('MV2D_DEBUG get_box_params: lidar2img[0]=\n', lidar2img_list[0])
-            except Exception:
-                pass
+        # if os.environ.get('MV2D_DEBUG') == '1':
+        #     try:
+        #         print('MV2D_DEBUG get_box_params: intrinsic_list.shape=', intrinsic_list.shape)
+        #         print('MV2D_DEBUG get_box_params: intrinsics[0]=\n', intrinsic_list[0])
+        #         print('MV2D_DEBUG get_box_params: extrinsics[0]=\n', extrinsic_list[0])
+        #         print('MV2D_DEBUG get_box_params: lidar2img[0]=\n', lidar2img_list[0])
+        #     except Exception:
+        #         pass
         return intrinsic_list, extrinsic_list, lidar2img_list
         
         # return intrinsic_list, extrinsic_list
