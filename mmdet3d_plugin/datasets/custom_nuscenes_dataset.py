@@ -24,6 +24,7 @@ from mmdet3d.datasets.nuscenes_dataset import NuScenesDataset
 import os
 import copy
 from mmdet3d.structures.bbox_3d import CameraInstance3DBoxes, LiDARInstance3DBoxes, get_box_type, Box3DMode
+from scipy.optimize import linear_sum_assignment
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 import numpy as np
@@ -49,40 +50,48 @@ class CustomNuScenesDataset(NuScenesDataset):
     
     def filter_data(self):
         # get 10 random samples for debugging shuffled
-        if self.mini:
-            # num_samples = 10
-            original_data_list = self.data_list
-            # np.random.seed(42)
-            # shuffled_indices = np.random.permutation(len(original_data_list))
-            shuffled_indices = np.array([17050, 31682, 32461, 33640, 4387, 5797, 32258, 3432, 28618, 7005, 
-                                         14753, 30383, 23006, 27344, 12790, 14268, 13735, 7764, 10023, 9516, 
-                                         28943, 16923, 5111, 31179, 30704, 30800, 3105, 18525, 12219, 2313, 
-                                         19388, 3409, 21782, 15765, 27567, 7099, 31085, 9075, 18900, 10351, 
-                                         2412, 13900, 33406, 19785, 11910, 19081, 22952, 13624, 7708, 33381, 
-                                         7712, 25565, 21508, 25893, 31461, 8590, 12195, 8359, 27535, 712, 2023, 
-                                         33961, 30484, 26053, 1610, 27296, 29765, 22133, 14033, 34127, 19799, 29803, 
-                                         32179, 25103, 28952, 346, 18481, 15190, 19390, 15636, 25441, 23641, 19274, 
-                                         25380, 11526, 33205, 1526, 14254, 29326, 16198, 7901, 2723, 29805, 16718, 24960, 
-                                         7197, 27121, 18754, 33004, 29935])
-            # np.array([8211, 1253, 6224, 6493, 32746, 31644, 10448, 21114, 35166, 22658])
-            
-            # self.data_list = [original_data_list[i] for i in shuffled_indices[:num_samples]]
-            self.data_list = [original_data_list[i] for i in shuffled_indices]
-            # save the loaded data_list tokens for reference
-            self.loaded_tokens = []
+        if True:
+            token = "a7831d4d1db54053a501d0418545fee2"
+            new_data_list = []
             for info in self.data_list:
-                self.loaded_tokens.append(info['token'])
-            # print all loaded tokens
-            print("Loaded mini dataset with tokens:")
-            for token in self.loaded_tokens:
-                print(token)
+                if info['token'] == token:
+                    new_data_list.append(info)
+            self.data_list = new_data_list
+            return self.data_list
+        # if self.mini:
+        #     # num_samples = 10
+        #     original_data_list = self.data_list
+        #     # np.random.seed(42)
+        #     # shuffled_indices = np.random.permutation(len(original_data_list))
+        #     shuffled_indices = np.array([17050, 31682, 32461, 33640, 4387, 5797, 32258, 3432, 28618, 7005, 
+        #                                  14753, 30383, 23006, 27344, 12790, 14268, 13735, 7764, 10023, 9516, 
+        #                                  28943, 16923, 5111, 31179, 30704, 30800, 3105, 18525, 12219, 2313, 
+        #                                  19388, 3409, 21782, 15765, 27567, 7099, 31085, 9075, 18900, 10351, 
+        #                                  2412, 13900, 33406, 19785, 11910, 19081, 22952, 13624, 7708, 33381, 
+        #                                  7712, 25565, 21508, 25893, 31461, 8590, 12195, 8359, 27535, 712, 2023, 
+        #                                  33961, 30484, 26053, 1610, 27296, 29765, 22133, 14033, 34127, 19799, 29803, 
+        #                                  32179, 25103, 28952, 346, 18481, 15190, 19390, 15636, 25441, 23641, 19274, 
+        #                                  25380, 11526, 33205, 1526, 14254, 29326, 16198, 7901, 2723, 29805, 16718, 24960, 
+        #                                  7197, 27121, 18754, 33004, 29935])
+        #     # np.array([8211, 1253, 6224, 6493, 32746, 31644, 10448, 21114, 35166, 22658])
+            
+        #     # self.data_list = [original_data_list[i] for i in shuffled_indices[:num_samples]]
+        #     self.data_list = [original_data_list[i] for i in shuffled_indices]
+        #     # save the loaded data_list tokens for reference
+        #     self.loaded_tokens = []
+        #     for info in self.data_list:
+        #         self.loaded_tokens.append(info['token'])
+        #     # print all loaded tokens
+        #     print("Loaded mini dataset with tokens:")
+        #     for token in self.loaded_tokens:
+        #         print(token)
                 
-            # save tokens to a txt file
-            with open("loaded_mini_dataset_tokens.txt", "w") as f:
-                for token in self.loaded_tokens:
-                    f.write(token + "\n")
+        #     # save tokens to a txt file
+        #     with open("loaded_mini_dataset_tokens.txt", "w") as f:
+        #         for token in self.loaded_tokens:
+        #             f.write(token + "\n")
                 
-        return self.data_list
+        # return self.data_list
     
     # def filter_data(self):
     #     original_data_list = self.data_list
@@ -446,7 +455,7 @@ class CustomNuScenesDataset(NuScenesDataset):
             lidar2img_rt = (viewpad @ lidar2cam_rt)
             intrinsics.append(viewpad)
             extrinsics.append(
-                lidar2cam_rt)  ###The extrinsics mean the tranformation from lidar to camera. If anyone want to use the extrinsics as sensor to lidar, please use np.linalg.inv(lidar2cam_rt.T) and modify the ResizeCropFlipImage and LoadMultiViewImageFromMultiSweepsFiles.
+                lidar2cam_rt.T)  ###The extrinsics mean the tranformation from lidar to camera. If anyone want to use the extrinsics as sensor to lidar, please use np.linalg.inv(lidar2cam_rt.T) and modify the ResizeCropFlipImage and LoadMultiViewImageFromMultiSweepsFiles.
             lidar2img_rts.append(lidar2img_rt)
             images[cam_type] = dict(
                 img_path=img_path,
@@ -595,7 +604,16 @@ class CustomNuScenesDataset(NuScenesDataset):
             # Match projected 3D centers to 2D bbox centers
             # match = self.center_match_2d(centers_2d, proj_uv)
             
-                match = self.center_match_2d(centers_2d, proj_centers_2d)
+                # match = self.center_match_2d(centers_2d, proj_centers_2d)
+                match = self.hungarian_center_match_2d(
+                    centers_2d,
+                    proj_centers_2d,
+                    thresh=100
+                )
+                
+                m = match[match >= 0]
+                assert len(m) == len(np.unique(m)), "Duplicate matches found!"
+                
                 # image_size = (H, W)
                 # match = self.iou_match_2d(bboxes_2d, proj_bboxes_2d, iou_thresh=0.5)
                 # match = self.iou_match_2d_clipped(bboxes_2d, proj_bboxes_2d, image_size, iou_thresh=0.5)
@@ -700,7 +718,42 @@ class CustomNuScenesDataset(NuScenesDataset):
         # gt_instances_3d_lidar
         
         return input_dict
+    
+    def hungarian_center_match_2d(self, centers_2d, proj_centers_2d, thresh=150):
+        """
+        centers_2d: (N, 2)
+        proj_centers_2d: (M, 2), may contain NaNs
+        Returns: (N,) array of matched 3D indices or -1
+        """
+        N = len(centers_2d)
+        M = len(proj_centers_2d)
 
+        if N == 0:
+            return np.zeros((0,), dtype=np.int32)
+        if M == 0:
+            return np.full(N, -1, dtype=np.int32)
+
+        cost = np.full((N, M), 1e6, dtype=np.float32)
+
+        valid = ~np.isnan(proj_centers_2d).any(axis=1)
+        if valid.any():
+            # Only compute distances for valid projected centers
+            valid_proj = proj_centers_2d[valid]
+            # Compute pairwise distances: (N, M_valid)
+            dists = np.linalg.norm(centers_2d[:, None, :] - valid_proj[None, :, :], axis=-1)
+            # Set cost matrix for valid entries
+            valid_indices = np.where(valid)[0]
+            cost[:, valid_indices] = dists
+            cost[cost >= thresh] = 1e6
+
+        row_ind, col_ind = linear_sum_assignment(cost)
+
+        matches = np.full(N, -1, dtype=np.int32)
+        for r, c in zip(row_ind, col_ind):
+            if cost[r, c] < thresh:
+                matches[r] = c
+
+        return matches
     # def center_match_2d(self, pts_a, pts_b, thresh=50):
     #     """
     #     Match 2D centers by nearest neighbor in pixel space.

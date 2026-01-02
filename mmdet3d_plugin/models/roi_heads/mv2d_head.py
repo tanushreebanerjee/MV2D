@@ -52,7 +52,7 @@ class MV2DHead(BaseRoIHead, BBoxTestMixin, MaskTestMixin):
         self.force_fp32 = force_fp32
 
     @torch.no_grad()
-    def get_box_params(self, bboxes, intrinsics, extrinsics):
+    def get_box_params(self, bboxes, intrinsics, extrinsics, lidar2img):
         # TODO: check grad flow from boxes to intrinsic
         intrinsic_list = []
         extrinsic_list = []
@@ -72,7 +72,17 @@ class MV2DHead(BaseRoIHead, BBoxTestMixin, MaskTestMixin):
             extrinsic_list.append(extrinsic)
         intrinsic_list = torch.cat(intrinsic_list, 0)
         extrinsic_list = torch.cat(extrinsic_list, 0)
-        return intrinsic_list, extrinsic_list
+        
+        # also return lidar2img
+        lidar2img_list = []
+        for img_id, (bbox, lidar2img_mat) in enumerate(zip(bboxes, lidar2img)):
+            lidar2img_mat = torch.from_numpy(lidar2img_mat).to(bbox.device).double()
+            lidar2img_mat = lidar2img_mat.repeat(bbox.shape[0], 1, 1)
+            lidar2img_list.append(lidar2img_mat)
+        lidar2img_list = torch.cat(lidar2img_list, 0)
+        return intrinsic_list, extrinsic_list, lidar2img_list
+        
+        # return intrinsic_list, extrinsic_list
 
     @property
     def strides(self):
@@ -111,9 +121,12 @@ class MV2DHead(BaseRoIHead, BBoxTestMixin, MaskTestMixin):
             proposal_list = [proposal] + proposal_list[1:]
 
         rois = bbox2roi(proposal_list)
-        intrinsics, extrinsics = self.get_box_params(proposal_list,
+        intrinsics, extrinsics, lidar2img = self.get_box_params(proposal_list,
                                                      [img_meta['intrinsics'] for img_meta in img_metas],
-                                                     [img_meta['extrinsics'] for img_meta in img_metas])
+                                                     [img_meta['extrinsics'] for img_meta in img_metas],
+                                                     [img_meta['lidar2img'] for img_meta in img_metas],
+                                                        )
+        
         bbox_feats = self.bbox_roi_extractor(
             x[:self.bbox_roi_extractor.num_inputs], rois)
 
@@ -127,7 +140,7 @@ class MV2DHead(BaseRoIHead, BBoxTestMixin, MaskTestMixin):
         )
 
         # query generator
-        reference_points, return_feats = self.query_generator(bbox_feats, intrinsics, extrinsics, extra_feats)
+        reference_points, return_feats = self.query_generator(bbox_feats, intrinsics, extrinsics, lidar2img, extra_feats)
         reference_points[..., 0:1] = (reference_points[..., 0:1] - self.pc_range[0]) / (
                 self.pc_range[3] - self.pc_range[0])
         reference_points[..., 1:2] = (reference_points[..., 1:2] - self.pc_range[1]) / (

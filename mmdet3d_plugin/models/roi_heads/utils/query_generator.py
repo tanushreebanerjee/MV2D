@@ -376,22 +376,23 @@ class QueryGenerator(BaseModule):
         return x
 
     # @force_fp32(apply_to=('center_pred', ))
-    def center2lidar(self, center_pred, intrinsic, extrinsic):
+    def center2lidar(self, center_pred, intrinsic, extrinsic, lidar2img=None):
         # [z, z, 1, 1] * pts_img_home.T = intrinsic @ extrinsic.T @ pts_lidar_hom.T
         center_img = torch.cat([center_pred[:, :2] * center_pred[:, 2:3], center_pred[:, 2:3]], dim=1)
         center_img_hom = torch.cat([center_img, center_img.new_ones([center_img.shape[0], 1])], dim=1)  # [num_rois, 4]
-        lidar2img = torch.bmm(intrinsic, extrinsic.transpose(1, 2))
+        if lidar2img is None:
+            lidar2img = torch.bmm(intrinsic, extrinsic.transpose(1, 2))
         img2lidar = torch.inverse(lidar2img).float()
         center_lidar = torch.bmm(img2lidar, center_img_hom[..., None])[:, :3, 0]
         return center_lidar
 
-    def forward(self, x, intrinsics, extrinsics, extra_feats=dict()):
+    def forward(self, x, intrinsics, extrinsics, lidar2img, extra_feats=dict()):
         if not self.with_cp:
             roi_feat, return_feats = self.get_roi_feat(x, extra_feats)
-            center_pred, return_feats = self.get_prediction(roi_feat, intrinsics, extrinsics, extra_feats, return_feats)
+            center_pred, return_feats = self.get_prediction(roi_feat, intrinsics, extrinsics, lidar2img, extra_feats, return_feats)
         else:
             roi_feat, return_feats = cp.checkpoint(self.get_roi_feat, x, extra_feats)
-            center_pred, return_feats = cp.checkpoint(self.get_prediction, roi_feat, intrinsics, extrinsics, extra_feats, return_feats)
+            center_pred, return_feats = cp.checkpoint(self.get_prediction, roi_feat, intrinsics, extrinsics, lidar2img, extra_feats, return_feats)
         return center_pred, return_feats
 
     def get_roi_feat(self, x, extra_feats=dict()):
@@ -418,7 +419,7 @@ class QueryGenerator(BaseModule):
 
         return x, return_feats
 
-    def get_prediction(self, x, intrinsics, extrinsics, extra_feats, return_feats):
+    def get_prediction(self, x, intrinsics, extrinsics, lidar2img, extra_feats, return_feats):
         # separate branches
         x_cls = x
         x_center = x
@@ -445,6 +446,6 @@ class QueryGenerator(BaseModule):
         center_pred = self.fc_center(x_center) if self.with_center else None
         attr_pred = self.fc_attr(x_attr) if self.with_attr else None
 
-        center_lidar = self.center2lidar(center_pred, intrinsics, extrinsics)
+        center_lidar = self.center2lidar(center_pred, intrinsics, extrinsics, lidar2img=None) # lidar2img
 
         return center_lidar, return_feats

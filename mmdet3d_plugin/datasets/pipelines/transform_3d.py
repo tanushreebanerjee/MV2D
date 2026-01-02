@@ -589,7 +589,7 @@ class ResizeCropFlipImageMono(ResizeCropFlipImage):
             results['intrinsics'][i][:3, :3] = ida_mat @ results['intrinsics'][i][:3, :3]
 
         results["img"] = new_imgs
-        results['lidar2img'] = [results['intrinsics'][i] @ results['extrinsics'][i] for i in
+        results['lidar2img'] = [results['intrinsics'][i] @ results['extrinsics'][i].T for i in
                                 range(len(results['extrinsics']))] # .T
 
         if self.with_bbox_2d:

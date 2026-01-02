@@ -131,9 +131,14 @@ class MV2DSHead(MV2DHead):
             proposal_list = [proposal] + proposal_list[1:]
 
         rois = bbox2roi(proposal_list)
-        intrinsics, extrinsics = self.get_box_params(proposal_list,
+        # intrinsics, extrinsics = self.get_box_params(proposal_list,
+        #                                              [img_meta['intrinsics'] for img_meta in img_metas],
+        #                                              [img_meta['extrinsics'] for img_meta in img_metas])
+        intrinsics, extrinsics, lidar2img = self.get_box_params(proposal_list,
                                                      [img_meta['intrinsics'] for img_meta in img_metas],
-                                                     [img_meta['extrinsics'] for img_meta in img_metas])
+                                                     [img_meta['extrinsics'] for img_meta in img_metas],
+                                                     [img_meta['lidar2img'] for img_meta in img_metas]
+                                                     )
         
         # if rois.shape[1] == 6: (rois = view_id, class, x1, y1, x2, y2)
         # we need it to be [view_idx, x1, y1, x2, y2]
@@ -154,9 +159,30 @@ class MV2DSHead(MV2DHead):
         extra_feats = dict(
             intrinsic=self.process_intrins_feat(rois, intrinsics)
         )
+        
+        # intrinsics[0]
+        # tensor([[ 19.6843,   0.0000,  12.4874,   0.0000],
+    #     [  0.0000,  58.6319, -46.3850,   0.0000],
+    #     [  0.0000,   0.0000,   1.0000,   0.0000],
+    #     [  0.0000,   0.0000,   0.0000,   1.0000]], device='cuda:0',
+    #    dtype=torch.float64)
+    
+#     extrinsics[0]
+# tensor([[ 0.9999,  0.0119, -0.0073,  0.0010],
+#         [-0.0080,  0.0566, -0.9984, -0.3480],
+#         [-0.0115,  0.9983,  0.0567, -0.5267],
+#         [ 0.0000,  0.0000,  0.0000,  1.0000]], device='cuda:0',
+#        dtype=torch.float64)
+
+# lidar2img[0]
+# tensor([[ 1.2432e+03,  8.4013e+02,  3.7749e+01, -4.3404e+02],
+#         [-1.5373e+01,  5.4016e+02, -1.2241e+03, -6.8350e+02],
+#         [-1.1486e-02,  9.9832e-01,  5.6730e-02, -5.2668e-01],
+#         [ 0.0000e+00,  0.0000e+00,  0.0000e+00,  1.0000e+00]], device='cuda:0',
+#        dtype=torch.float64)
 
         # query generator
-        reference_points, return_feats = self.query_generator(bbox_feats, intrinsics, extrinsics, extra_feats)
+        reference_points, return_feats = self.query_generator(bbox_feats, intrinsics, extrinsics, lidar2img, extra_feats)
         reference_points[..., 0:1] = (reference_points[..., 0:1] - self.pc_range[0]) / (
                 self.pc_range[3] - self.pc_range[0])
         reference_points[..., 1:2] = (reference_points[..., 1:2] - self.pc_range[1]) / (
