@@ -89,7 +89,7 @@ class PE(nn.Module):
         else:   
             pad_h, pad_w, _ = img_metas[0]['pad_shape']
 
-        t, C, H, W = img_feats.shape
+        t, C, H, W = img_feats.shape # torch.Size([6, 256, 29, 50])
         N = img_metas[0]['num_views']
         B = t // N
         # coords_h = torch.arange(H, device=img_feats.device).float() * pad_h / H
@@ -113,7 +113,7 @@ class PE(nn.Module):
         coords[..., :2] = coords[..., :2] * torch.maximum(coords[..., 2:3], torch.ones_like(coords[..., 2:3]) * eps)
 
         img2lidars = [np.linalg.inv(img_meta['lidar2img']) for img_meta in img_metas]
-        img2lidars = np.asarray(img2lidars)
+        img2lidars = np.asarray(img2lidars) # (6, 4, 4)
 
         img2lidars = coords.new_tensor(img2lidars)  # (B * N, 4, 4)
         # import ipdb; ipdb.set_trace()
@@ -151,7 +151,7 @@ class PE(nn.Module):
 
         for lvl, x in enumerate(mlvl_feats):
             masks = x.new_ones(
-                (batch_size, num_views, input_img_h, input_img_w))
+                (batch_size, num_views, input_img_h, input_img_w)) # this is the padding mask!
             for img_id in range(batch_size):
                 for view_id in range(num_views):
                     if len(img_metas[img_id * num_views + view_id]['img_shape']) == 2:

@@ -283,7 +283,7 @@ class CustomNuScenesDataset(NuScenesDataset):
 
         # Homogenize and transform to camera coords
         corners_hom = np.concatenate([corners, np.ones((corners.shape[0], 8, 1))], axis=-1)  # (N,8,4)
-        corners_cam = corners_hom @ lidar2cam.T  # (N,8,4)
+        corners_cam = corners_hom @ lidar2cam  # (N,8,4)
         corners_cam = corners_cam[..., :3]
 
         # Project to image plane
@@ -601,14 +601,15 @@ class CustomNuScenesDataset(NuScenesDataset):
                 #                 (proj_centers_2d[:, 1] >= 0) & (proj_centers_2d[:, 1] < H)
                 # proj_centers_2d[~in_bounds_mask] = np.nan
             
-            # Match projected 3D centers to 2D bbox centers
-            # match = self.center_match_2d(centers_2d, proj_uv)
+                # Match projected 3D centers to 2D bbox centers
+                # match = self.center_match_2d(centers_2d, proj_uv)
             
                 # match = self.center_match_2d(centers_2d, proj_centers_2d)
                 match = self.hungarian_center_match_2d(
                     centers_2d,
                     proj_centers_2d,
-                    thresh=100
+                    labels_2d,
+                    gt_labels_3d,
                 )
                 
                 m = match[match >= 0]
@@ -623,21 +624,22 @@ class CustomNuScenesDataset(NuScenesDataset):
             # plot 2d centers and projected 3d centers
             # def plot_centers(image_path, centers_2d, proj_centers_2d, match, save_path="centers.png"):
             #     img = cv2.imread(image_path)
-                
+            #     # remove nans from proj_centers_2d
+            #     proj_centers_2d = np.nan_to_num(proj_centers_2d, nan=-1)
             #     for i, c in enumerate(centers_2d.astype(int)):
             #         if match.sum() > 0:
-            #             color = (0, 255, 0) if match[i] > -1 else (0, 255, 255)
+            #             color = (0, 255, 0) if match[i] > -1 else (0, 255, 255) # green for match, yellow for no match
             #         else:
-            #             color = (0, 255, 255)
+            #             color = (0, 255, 255) # yellow for no match
             #         cv2.circle(img, tuple(c), 5, color, -1)
             #     for i, c in enumerate(proj_centers_2d.astype(int)):
-            #         cv2.circle(img, tuple(c), 3, (255, 0, 0), -1)
+            #         cv2.circle(img, tuple(c), 3, (255, 0, 0), -1) # blue for projected 3d center
             #     cv2.imwrite(save_path, img)
-                # plt.figure(figsize=(12, 8))
-                # plt.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
-                # plt.axis("off")
-                # plt.savefig(save_path.replace(".png", "_plt.png"), bbox_inches="tight", dpi=300)
-                # plt.close()
+            #     plt.figure(figsize=(12, 8))
+            #     plt.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+            #     plt.axis("off")
+            #     plt.savefig(save_path.replace(".png", "_plt.png"), bbox_inches="tight", dpi=300)
+            #     plt.close()
             # plot_centers(image_paths[cam_i], centers_2d, proj_centers_2d, match, save_path=f"centers_cam{cam_i}_idx{index}.png")
 
             gt_bboxes_2d.append(bboxes_2d)
@@ -652,7 +654,7 @@ class CustomNuScenesDataset(NuScenesDataset):
         annos['gt_bboxes'] = gt_bboxes_2d
         annos['gt_bboxes_labels'] = gt_labels_2d
         if not self.test_mode:
-            annos['gt_bboxes_2d_to_3d'] = gt_bboxes_2d_to_3d
+            annos['gt_bboxes_2d_to_3d'] = gt_bboxes_2d_to_3d.copy()
         annos['gt_bboxes_ignore'] = gt_bboxes_ignore
         annos['centers_2d'] = gt_centers2d
         if not self.test_mode:
@@ -708,7 +710,7 @@ class CustomNuScenesDataset(NuScenesDataset):
             gt_instances[cam_i].bboxes = annos['gt_bboxes'][cam_i]
             gt_instances[cam_i].labels = annos['gt_bboxes_labels'][cam_i]
             if not self.test_mode:
-                gt_instances[cam_i].bboxes_2d_to_3d = annos['gt_bboxes_2d_to_3d'][cam_i]
+                gt_instances[cam_i].bboxes_2d_to_3d = annos['gt_bboxes_2d_to_3d'][cam_i].copy()
             gt_instances[cam_i].centers_2d = annos['centers_2d'][cam_i]
             
         input_dict['gt_instances'] = gt_instances
@@ -717,14 +719,17 @@ class CustomNuScenesDataset(NuScenesDataset):
         
         # gt_instances_3d_lidar
         
-        return input_dict
+        return copy.deepcopy(input_dict)
     
-    def hungarian_center_match_2d(self, centers_2d, proj_centers_2d, thresh=150):
-        """
-        centers_2d: (N, 2)
-        proj_centers_2d: (M, 2), may contain NaNs
-        Returns: (N,) array of matched 3D indices or -1
-        """
+    def hungarian_center_match_2d(
+        self,
+        centers_2d,          # (N, 2)
+        proj_centers_2d,     # (M, 2), may contain NaNs
+        labels_2d,           # (N,)
+        labels_3d,           # (M,)
+        dist_thresh=100,
+        class_penalty=500,
+        ):
         N = len(centers_2d)
         M = len(proj_centers_2d)
 
@@ -733,24 +738,39 @@ class CustomNuScenesDataset(NuScenesDataset):
         if M == 0:
             return np.full(N, -1, dtype=np.int32)
 
+        # Initialize cost
         cost = np.full((N, M), 1e6, dtype=np.float32)
 
         valid = ~np.isnan(proj_centers_2d).any(axis=1)
-        if valid.any():
-            # Only compute distances for valid projected centers
-            valid_proj = proj_centers_2d[valid]
-            # Compute pairwise distances: (N, M_valid)
-            dists = np.linalg.norm(centers_2d[:, None, :] - valid_proj[None, :, :], axis=-1)
-            # Set cost matrix for valid entries
-            valid_indices = np.where(valid)[0]
-            cost[:, valid_indices] = dists
-            cost[cost >= thresh] = 1e6
+        if not valid.any():
+            return np.full(N, -1, dtype=np.int32)
 
+        valid_idx = np.where(valid)[0]
+        valid_proj = proj_centers_2d[valid]
+
+        # Distance cost
+        dists = np.linalg.norm(
+            centers_2d[:, None, :] - valid_proj[None, :, :],
+            axis=-1
+        )  # (N, M_valid)
+
+        # Apply distance threshold
+        dists[dists >= dist_thresh] = 1e6
+
+        cost[:, valid_idx] = dists
+
+        # Class cost
+        for i in range(N):
+            for j, mj in enumerate(valid_idx):
+                if labels_2d[i] != labels_3d[mj]:
+                    cost[i, mj] += class_penalty
+
+        # Hungarian
         row_ind, col_ind = linear_sum_assignment(cost)
 
         matches = np.full(N, -1, dtype=np.int32)
         for r, c in zip(row_ind, col_ind):
-            if cost[r, c] < thresh:
+            if cost[r, c] < 1e6:
                 matches[r] = c
 
         return matches
@@ -769,127 +789,127 @@ class CustomNuScenesDataset(NuScenesDataset):
     #     match[dist.min(1) > thresh] = -1  # reject if too far
     #     assert len(match) == len(pts_a)
     #     return match
-    def center_match_2d(self, pts_a, pts_b, thresh=50):
-        if len(pts_a) == 0:
-            matches = np.array([], dtype=np.int32)
-            assert len(matches) == len(pts_a)
-            return matches
-        if len(pts_b) == 0:
-            matches = np.full(len(pts_a), -1, dtype=np.int32)
-            assert len(matches) == len(pts_a)
-            return matches
+    # def center_match_2d(self, pts_a, pts_b, thresh=50):
+    #     if len(pts_a) == 0:
+    #         matches = np.array([], dtype=np.int32)
+    #         assert len(matches) == len(pts_a)
+    #         return matches
+    #     if len(pts_b) == 0:
+    #         matches = np.full(len(pts_a), -1, dtype=np.int32)
+    #         assert len(matches) == len(pts_a)
+    #         return matches
 
-        valid_mask_b = ~np.isnan(pts_b).any(axis=1)
-        pts_b_valid = pts_b[valid_mask_b]
-        if len(pts_b_valid) == 0:
-            matches = np.full(len(pts_a), -1, dtype=np.int32)
-            assert len(matches) == len(pts_a)
-            return matches
+    #     valid_mask_b = ~np.isnan(pts_b).any(axis=1)
+    #     pts_b_valid = pts_b[valid_mask_b]
+    #     if len(pts_b_valid) == 0:
+    #         matches = np.full(len(pts_a), -1, dtype=np.int32)
+    #         assert len(matches) == len(pts_a)
+    #         return matches
 
-        dist = np.linalg.norm(pts_a[:, None, :] - pts_b_valid[None, :, :], axis=-1)
-        match_local = dist.argmin(1)
-        match_local[dist.min(1) > thresh] = -1
+    #     dist = np.linalg.norm(pts_a[:, None, :] - pts_b_valid[None, :, :], axis=-1)
+    #     match_local = dist.argmin(1)
+    #     match_local[dist.min(1) > thresh] = -1
 
-        # Map back to global 3D indices
-        global_indices = np.arange(len(pts_b))[valid_mask_b]
-        matches = np.full(len(pts_a), -1, dtype=np.int32)
-        matches[match_local != -1] = global_indices[match_local[match_local != -1]]
-        assert len(matches) == len(pts_a)
-        return matches
+    #     # Map back to global 3D indices
+    #     global_indices = np.arange(len(pts_b))[valid_mask_b]
+    #     matches = np.full(len(pts_a), -1, dtype=np.int32)
+    #     matches[match_local != -1] = global_indices[match_local[match_local != -1]]
+    #     assert len(matches) == len(pts_a)
+    #     return matches
 
-    def iou_match_2d(self, boxes_a, boxes_b, iou_thresh=0.5):
-        """
-        Match boxes_a to boxes_b by IoU.
+    # def iou_match_2d(self, boxes_a, boxes_b, iou_thresh=0.5):
+    #     """
+    #     Match boxes_a to boxes_b by IoU.
 
-        Args:
-            boxes_a: (N,4) ground-truth 2D boxes [xmin, ymin, xmax, ymax] (numpy or tensor)
-            boxes_b: (M,4) projected 3D boxes [xmin, ymin, xmax, ymax] (numpy or tensor)
-            iou_thresh: minimum IoU to accept a match
+    #     Args:
+    #         boxes_a: (N,4) ground-truth 2D boxes [xmin, ymin, xmax, ymax] (numpy or tensor)
+    #         boxes_b: (M,4) projected 3D boxes [xmin, ymin, xmax, ymax] (numpy or tensor)
+    #         iou_thresh: minimum IoU to accept a match
 
-        Returns:
-            matches: (N,) indices into boxes_b, -1 if no match
-        """
-        if len(boxes_a) == 0 or len(boxes_b) == 0:
-            return np.full(len(boxes_a), -1, dtype=np.int32)
+    #     Returns:
+    #         matches: (N,) indices into boxes_b, -1 if no match
+    #     """
+    #     if len(boxes_a) == 0 or len(boxes_b) == 0:
+    #         return np.full(len(boxes_a), -1, dtype=np.int32)
 
-        # Convert to torch tensors
-        boxes_a = torch.as_tensor(boxes_a, dtype=torch.float32)
-        boxes_b = torch.as_tensor(boxes_b, dtype=torch.float32)
+    #     # Convert to torch tensors
+    #     boxes_a = torch.as_tensor(boxes_a, dtype=torch.float32)
+    #     boxes_b = torch.as_tensor(boxes_b, dtype=torch.float32)
 
-        # Compute IoU matrix
-        iou_matrix = box_iou(boxes_a, boxes_b)  # (N, M)
+    #     # Compute IoU matrix
+    #     iou_matrix = box_iou(boxes_a, boxes_b)  # (N, M)
 
-        # Pick best match for each GT box
-        max_iou, match_idx = iou_matrix.max(dim=1)
-        match_idx[max_iou < iou_thresh] = -1  # reject low IoU matches
+    #     # Pick best match for each GT box
+    #     max_iou, match_idx = iou_matrix.max(dim=1)
+    #     match_idx[max_iou < iou_thresh] = -1  # reject low IoU matches
 
-        return match_idx.cpu().numpy().astype(np.int32)
+    #     return match_idx.cpu().numpy().astype(np.int32)
     
-    def iou_match_2d_clipped(self, boxes_a, boxes_b, image_size, iou_thresh=0.5):
-        """
-        Match 2D boxes by IoU, clipping boxes_b to image boundaries first.
+    # def iou_match_2d_clipped(self, boxes_a, boxes_b, image_size, iou_thresh=0.5):
+    #     """
+    #     Match 2D boxes by IoU, clipping boxes_b to image boundaries first.
 
-        Args:
-            boxes_a: (N,4) GT boxes [xmin, ymin, xmax, ymax] (numpy or tensor)
-            boxes_b: (M,4) projected 3D boxes [xmin, ymin, xmax, ymax] (numpy or tensor)
-            image_size: tuple (H, W) of image dimensions
-            iou_thresh: minimum IoU to accept a match
+    #     Args:
+    #         boxes_a: (N,4) GT boxes [xmin, ymin, xmax, ymax] (numpy or tensor)
+    #         boxes_b: (M,4) projected 3D boxes [xmin, ymin, xmax, ymax] (numpy or tensor)
+    #         image_size: tuple (H, W) of image dimensions
+    #         iou_thresh: minimum IoU to accept a match
 
-        Returns:
-            matches: (N,) indices into boxes_b, -1 if no match
-        """
-        if len(boxes_a) == 0 or len(boxes_b) == 0:
-            return np.full(len(boxes_a), -1, dtype=np.int32)
+    #     Returns:
+    #         matches: (N,) indices into boxes_b, -1 if no match
+    #     """
+    #     if len(boxes_a) == 0 or len(boxes_b) == 0:
+    #         return np.full(len(boxes_a), -1, dtype=np.int32)
 
-        H, W = image_size
+    #     H, W = image_size
 
-        # Convert to torch tensors
-        boxes_a = torch.as_tensor(boxes_a, dtype=torch.float32)
-        boxes_b = torch.as_tensor(boxes_b, dtype=torch.float32)
+    #     # Convert to torch tensors
+    #     boxes_a = torch.as_tensor(boxes_a, dtype=torch.float32)
+    #     boxes_b = torch.as_tensor(boxes_b, dtype=torch.float32)
 
-        # Clip projected boxes to image boundaries
-        boxes_b_clipped = boxes_b.clone()
-        boxes_b_clipped[:, 0] = boxes_b_clipped[:, 0].clamp(0, W-1)
-        boxes_b_clipped[:, 1] = boxes_b_clipped[:, 1].clamp(0, H-1)
-        boxes_b_clipped[:, 2] = boxes_b_clipped[:, 2].clamp(0, W-1)
-        boxes_b_clipped[:, 3] = boxes_b_clipped[:, 3].clamp(0, H-1)
+    #     # Clip projected boxes to image boundaries
+    #     boxes_b_clipped = boxes_b.clone()
+    #     boxes_b_clipped[:, 0] = boxes_b_clipped[:, 0].clamp(0, W-1)
+    #     boxes_b_clipped[:, 1] = boxes_b_clipped[:, 1].clamp(0, H-1)
+    #     boxes_b_clipped[:, 2] = boxes_b_clipped[:, 2].clamp(0, W-1)
+    #     boxes_b_clipped[:, 3] = boxes_b_clipped[:, 3].clamp(0, H-1)
 
-        # Remove boxes that are fully outside the image
-        widths = boxes_b_clipped[:, 2] - boxes_b_clipped[:, 0]
-        heights = boxes_b_clipped[:, 3] - boxes_b_clipped[:, 1]
-        valid_mask = (widths > 0) & (heights > 0)
-        boxes_b_clipped = boxes_b_clipped[valid_mask]
+    #     # Remove boxes that are fully outside the image
+    #     widths = boxes_b_clipped[:, 2] - boxes_b_clipped[:, 0]
+    #     heights = boxes_b_clipped[:, 3] - boxes_b_clipped[:, 1]
+    #     valid_mask = (widths > 0) & (heights > 0)
+    #     boxes_b_clipped = boxes_b_clipped[valid_mask]
 
-        if boxes_b_clipped.shape[0] == 0:
-            return np.full(len(boxes_a), -1, dtype=np.int32)
+    #     if boxes_b_clipped.shape[0] == 0:
+    #         return np.full(len(boxes_a), -1, dtype=np.int32)
 
-        # Compute IoU
-        iou_matrix = box_iou(boxes_a, boxes_b_clipped)
+    #     # Compute IoU
+    #     iou_matrix = box_iou(boxes_a, boxes_b_clipped)
 
-        # Best match per GT box
-        max_iou, match_idx = iou_matrix.max(dim=1)
-        match_idx[max_iou < iou_thresh] = -1
+    #     # Best match per GT box
+    #     max_iou, match_idx = iou_matrix.max(dim=1)
+    #     match_idx[max_iou < iou_thresh] = -1
 
-        # Map back to original indices
-        valid_indices = torch.nonzero(valid_mask).squeeze(1)
-        match_idx = match_idx.numpy()
-        final_match = np.full(len(boxes_a), -1, dtype=np.int32)
-        for i, m in enumerate(match_idx):
-            if m != -1:
-                final_match[i] = valid_indices[m].item()
+    #     # Map back to original indices
+    #     valid_indices = torch.nonzero(valid_mask).squeeze(1)
+    #     match_idx = match_idx.numpy()
+    #     final_match = np.full(len(boxes_a), -1, dtype=np.int32)
+    #     for i, m in enumerate(match_idx):
+    #         if m != -1:
+    #             final_match[i] = valid_indices[m].item()
 
-        return final_match
+    #     return final_match
 
-    def center_match(self, bboxes_a, bboxes_b):
-        cts_a, cts_b = bboxes_a[:, :3], bboxes_b[:, :3]
-        if len(cts_a) == 0:
-            return np.zeros(len(cts_a), dtype=np.int32) - 1
-        if len(cts_b) == 0:
-            return np.zeros(len(cts_a), dtype=np.int32) - 1
-        dist = np.abs(cts_a[:, None] - cts_b[None]).sum(-1)
-        match = dist.argmin(1)
-        match[dist.min(1) > 1e-3] = -1
-        return match
+    # def center_match(self, bboxes_a, bboxes_b):
+    #     cts_a, cts_b = bboxes_a[:, :3], bboxes_b[:, :3]
+    #     if len(cts_a) == 0:
+    #         return np.zeros(len(cts_a), dtype=np.int32) - 1
+    #     if len(cts_b) == 0:
+    #         return np.zeros(len(cts_a), dtype=np.int32) - 1
+    #     dist = np.abs(cts_a[:, None] - cts_b[None]).sum(-1)
+    #     match = dist.argmin(1)
+    #     match[dist.min(1) > 1e-3] = -1
+    #     return match
 
     def get_ann_info(self, index, info=None):
         """Get annotation info according to the given index.
@@ -1268,7 +1288,7 @@ def visualize_2d_with_3d_distance(image_paths, gt_bboxes_2d, gt_bboxes_3d, gt_bb
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
         bboxes_2d = gt_bboxes_2d[img_idx]
-        map_2d_to_3d = gt_bboxes_2d_to_3d[img_idx]
+        map_2d_to_3d = gt_bboxes_2d_to_3d[img_idx].copy()
 
         fig, ax = plt.subplots(figsize=(12, 6))
         ax.imshow(img)

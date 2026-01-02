@@ -1,5 +1,6 @@
 # Copyright (c) OpenMMLab. All rights reserved.
 import copy
+import os
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -80,6 +81,17 @@ class MV2DHead(BaseRoIHead, BBoxTestMixin, MaskTestMixin):
             lidar2img_mat = lidar2img_mat.repeat(bbox.shape[0], 1, 1)
             lidar2img_list.append(lidar2img_mat)
         lidar2img_list = torch.cat(lidar2img_list, 0)
+        # NOTE: intrinsics/extrinsics/lidar2img are converted from numpy->torch
+        # and repeated per-roi above. Intrinsics are adjusted for ROI scaling.
+        # Debug: optionally print small diagnostics when `MV2D_DEBUG=1`.
+        if os.environ.get('MV2D_DEBUG') == '1':
+            try:
+                print('MV2D_DEBUG get_box_params: intrinsic_list.shape=', intrinsic_list.shape)
+                print('MV2D_DEBUG get_box_params: intrinsics[0]=\n', intrinsic_list[0])
+                print('MV2D_DEBUG get_box_params: extrinsics[0]=\n', extrinsic_list[0])
+                print('MV2D_DEBUG get_box_params: lidar2img[0]=\n', lidar2img_list[0])
+            except Exception:
+                pass
         return intrinsic_list, extrinsic_list, lidar2img_list
         
         # return intrinsic_list, extrinsic_list
@@ -134,12 +146,13 @@ class MV2DHead(BaseRoIHead, BBoxTestMixin, MaskTestMixin):
         c = bbox_feats.size(1)
         bbox_feats, _ = bbox_feats.split([c // 2, c // 2], dim=1)
 
-        # intrinsics as extra input feature
+        # intrinsics as extra input feature (processed/flattened by `process_intrins_feat`)
         extra_feats = dict(
             intrinsic=self.process_intrins_feat(rois, intrinsics)
         )
 
-        # query generator
+        # query generator: consumes intrinsics, extrinsics, lidar2img
+        # (see QueryGenerator.forward / center2lidar for usage)
         reference_points, return_feats = self.query_generator(bbox_feats, intrinsics, extrinsics, lidar2img, extra_feats)
         reference_points[..., 0:1] = (reference_points[..., 0:1] - self.pc_range[0]) / (
                 self.pc_range[3] - self.pc_range[0])
