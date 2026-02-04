@@ -89,9 +89,10 @@ class NMSFreeCoder(BaseBBoxCoder):
             if self.score_threshold:
                 mask &= thresh_mask
 
-            boxes3d = final_box_preds[mask]
-            scores = final_scores[mask]
-            labels = final_preds[mask]
+            # TODO: debug: masking disabled so we can see all predictions
+            boxes3d = final_box_preds#[mask]
+            scores = final_scores#[mask]
+            labels = final_preds#[mask]
             predictions_dict = {
                 'bboxes': boxes3d,
                 'scores': scores,

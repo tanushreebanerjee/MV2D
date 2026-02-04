@@ -289,6 +289,7 @@ class MV2DHead(BaseRoIHead, BBoxTestMixin, MaskTestMixin):
         
         # proposal_list[0] = torch.Tensor[view_id, x1, y1, x2, y2, score, class]
         # we need it to be [class, x1, y1, x2, y2]
+        # [x1, y1, x2, y2]
         proposal_list_new = []
         for i in range(len(proposal_list)):
             rois = proposal_list[i]
@@ -297,7 +298,7 @@ class MV2DHead(BaseRoIHead, BBoxTestMixin, MaskTestMixin):
                 rois_scores = rois[:, 4]
                 rois_bboxes = rois[:, 0:4]
                 rois_classes = rois[:, 5]
-                rois = torch.cat([rois_classes[:, None], rois_bboxes], dim=1)
+                rois = torch.cat([rois_bboxes], dim=1) # rois_classes[:, None], 
             proposal_list_new.append(rois)
         proposal_list = proposal_list_new
         

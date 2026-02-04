@@ -5,9 +5,9 @@
 # Copyright (c) OpenMMLab. All rights reserved.
 import copy
 import os
-
 import numpy as np
 import torch
+import matplotlib.pyplot as plt
 import torch.nn as nn
 import torch.nn.functional as F
 
@@ -346,3 +346,130 @@ class MV2DSHead(MV2DHead):
             dict: A dictionary of loss components.
         """
         return self.forward_train(x, proposal_list, gt_bboxes_3d, gt_labels_3d, img_metas, **kwargs)
+
+def debug_rescaled_intrinsics(
+    K_full,
+    K_roi,
+    bbox,
+    roi_size,
+    device
+):
+    torch.set_printoptions(precision=4, sci_mode=False)
+
+    dtype = K_full.dtype
+
+    X_cam = torch.tensor([
+        [0.0, 0.0, 10.0],
+        [1.0, 0.0, 10.0],
+        [0.0, 1.0, 10.0],
+        [1.0, 1.0, 10.0],
+    ], device=device, dtype=dtype)
+
+    bbox = bbox.to(device=device, dtype=dtype)
+    roi_size = torch.tensor(roi_size, device=device, dtype=dtype)
+
+    uv_full = project_points(K_full, X_cam)
+
+    scale = roi_size / (bbox[2:4] - bbox[:2])
+    uv_expected = (uv_full - bbox[:2]) * scale
+
+    uv_roi = project_points(K_roi, X_cam)
+
+    
+    print("\n==== ROI INTRINSIC DEBUG ====")
+    print("Full image projection:\n", uv_full)
+    print("Expected ROI projection:\n", uv_expected)
+    print("Actual ROI intrinsic projection:\n", uv_roi)
+    print("Diff (actual - expected):\n", uv_roi - uv_expected)
+
+
+def project_points(K, X_cam):
+    """
+    K: [3,3] or [4,4]
+    X_cam: [N,3]
+    """
+    if K.shape[0] == 4:
+        K = K[:3, :3]
+
+    dtype = K.dtype
+    device = K.device
+
+    X_cam = X_cam.to(device=device, dtype=dtype)
+
+    X = X_cam.t()          # [3, N]
+    x = K @ X              # [3, N]
+    x = x[:2] / x[2:3]
+    return x.t()
+
+def unproject_points(K, uv, depth):
+    """
+    K: [3,3] or [4,4]
+    uv: [N,2]
+    depth: [N]
+    """
+    if K.shape[0] == 4:
+        K = K[:3, :3]
+
+    dtype = K.dtype
+    device = K.device
+
+    uv = uv.to(device=device, dtype=dtype)
+    depth = depth.to(device=device, dtype=dtype)
+
+    uv_h = torch.cat([uv, torch.ones((uv.shape[0], 1), device=device, dtype=dtype)], dim=1)  # [N,3]
+    K_inv = torch.inverse(K)
+
+    X_cam = (K_inv @ uv_h.t()).t()  # [N,3]
+    X_cam = X_cam * depth.unsqueeze(1)
+    return X_cam
+    
+def debug_intrinsics(
+    proposal,
+    intrinsics_full,
+    intrinsics_roi,
+    roi_size,
+    device
+):
+    # take center of patch = 0, 0 in ROI, center of proposal bbox in nominal image coords
+    # project to cam coords, use K_roi^-1 for roi center, K_full^-1 for full image center
+    # should be same
+    # roi_center = 0, 0 in roi coords
+    
+    torch.set_printoptions(precision=4, sci_mode=False)
+
+    dtype = intrinsics_full.dtype
+    proposal = proposal.to(device=device, dtype=dtype)
+    intrinsics_full = intrinsics_full.to(device=device, dtype=dtype)
+    intrinsics_roi = intrinsics_roi.to(device=device, dtype=dtype)
+    roi_size = torch.tensor(roi_size, device=device, dtype=dtype)
+    
+    uv_roi = torch.tensor([[roi_size[0]/2, roi_size[1]/2]], device=device, dtype=dtype)  # [1,2]
+    depth = torch.tensor([10.0], device=device, dtype=dtype)  #
+    X_cam_from_roi = unproject_points(intrinsics_roi, uv_roi, depth)  # [1,3]
+    print("X_cam from ROI intrinsic:", X_cam_from_roi)
+    # now project to full image coords
+    uv_full = project_points(intrinsics_full, X_cam_from_roi)  # [1,2]
+    print("Projected uv in full image:", uv_full)
+    # should be center of proposal
+    proposal_center = (proposal[0:2] + proposal[2:4]) / 2
+    print("Proposal center:", proposal_center)
+    print("Diff (proj - prop center):", uv_full - proposal_center.unsqueeze(0))
+    
+    
+
+
+def to_torch(x, device, dtype=torch.double):
+    if isinstance(x, torch.Tensor):
+        return x.to(device=device, dtype=dtype)
+    else:
+        return torch.from_numpy(x).to(device=device, dtype=dtype)
+    
+    
+# idx=0
+# debug_rescaled_intrinsics(
+#     K_full=to_torch(intrinsics[0], intrinsics.device),
+#     K_roi=intrinsics[idx],
+#     bbox=proposal_list[0][0],
+#     roi_size=self.roi_size,
+#     device=intrinsics.device
+# )

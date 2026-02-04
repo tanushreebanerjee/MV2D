@@ -243,9 +243,14 @@ class CrossAttentionBoxHead(BaseModule):
             outputs_class = self.cls_branches[lvl](outs_dec[lvl])
             tmp = self.reg_branches[lvl](outs_dec[lvl])
 
-            tmp[..., 0:2] += reference[..., 0:2]
+            # tmp[..., 0:2] += reference[..., 0:2]
+            # tmp[..., 0:2] = tmp[..., 0:2].sigmoid()
+            # tmp[..., 4:5] += reference[..., 2:3]
+            # tmp[..., 4:5] = tmp[..., 4:5].sigmoid()
+            
+            tmp[..., 0:2] = reference[..., 0:2]
             tmp[..., 0:2] = tmp[..., 0:2].sigmoid()
-            tmp[..., 4:5] += reference[..., 2:3]
+            tmp[..., 4:5] = reference[..., 2:3]
             tmp[..., 4:5] = tmp[..., 4:5].sigmoid()
 
             outputs_coord = tmp
@@ -255,6 +260,7 @@ class CrossAttentionBoxHead(BaseModule):
         all_cls_scores = torch.stack(outputs_classes)
         all_bbox_preds = torch.stack(outputs_coords)
 
+        # TODO: check the pc_range order. dx should be height
         all_bbox_preds[..., 0:1] = (all_bbox_preds[..., 0:1] * (self.pc_range[3] - self.pc_range[0]) + self.pc_range[0])
         all_bbox_preds[..., 1:2] = (all_bbox_preds[..., 1:2] * (self.pc_range[4] - self.pc_range[1]) + self.pc_range[1])
         all_bbox_preds[..., 4:5] = (all_bbox_preds[..., 4:5] * (self.pc_range[5] - self.pc_range[2]) + self.pc_range[2])
@@ -399,8 +405,8 @@ class CrossAttentionBoxHead(BaseModule):
         for i in range(num_samples):
             preds = preds_dicts[i]
             bboxes = preds['bboxes']
-            bboxes[:, 2] = bboxes[:, 2] - bboxes[:, 5] * 0.5
-            bboxes = img_metas[i]['box_type_3d'](bboxes, bboxes.size(-1))
+            bboxes[:, 2] = bboxes[:, 2] - bboxes[:, 5] * 0.5 # convert to bottom center
+            bboxes = img_metas[i]['box_type_3d'](bboxes, bboxes.size(-1), origin=(0.5, 0.5, 0.0))
             scores = preds['scores']
             labels = preds['labels']
             ret_list.append([bboxes, scores, labels])

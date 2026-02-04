@@ -5,11 +5,16 @@ import warnings
 
 import mmcv
 import torch
-from mmcv import Config, DictAction
+# from mmcv import Config, DictAction
+from mmengine.config import Config, DictAction
 from mmcv.cnn import fuse_conv_bn
-from mmcv.parallel import MMDataParallel, MMDistributedDataParallel
-from mmcv.runner import (get_dist_info, init_dist, load_checkpoint,
-                         wrap_fp16_model)
+# from mmcv.parallel import MMDataParallel, MMDistributedDataParallel
+from mmengine.model.wrappers.distributed import MMDistributedDataParallel
+# from mmcv.runner import (get_dist_info, init_dist, load_checkpoint,
+#                          wrap_fp16_model)
+
+from mmengine.dist.utils import get_dist_info, init_dist
+from mmengine.runner.checkpoint import load_checkpoint
 
 import mmdet
 from mmdet3d.apis import single_gpu_test
@@ -220,8 +225,8 @@ def main():
     cfg.model.train_cfg = None
     model = build_model(cfg.model, test_cfg=cfg.get('test_cfg'))
     fp16_cfg = cfg.get('fp16', None)
-    if fp16_cfg is not None:
-        wrap_fp16_model(model)
+    # if fp16_cfg is not None:
+    #     wrap_fp16_model(model)
     checkpoint = load_checkpoint(model, args.checkpoint, map_location='cpu')
     if args.fuse_conv_bn:
         model = fuse_conv_bn(model)
@@ -238,16 +243,25 @@ def main():
         # segmentation dataset has `PALETTE` attribute
         model.PALETTE = dataset.PALETTE
 
-    if not distributed:
-        model = MMDataParallel(model, device_ids=cfg.gpu_ids)
-        outputs = single_gpu_test(model, data_loader, args.show, args.show_dir)
-    else:
-        model = MMDistributedDataParallel(
+    # if not distributed:
+    #     model = MMDataParallel(model, device_ids=cfg.gpu_ids)
+    #     outputs = single_gpu_test(model, data_loader, args.show, args.show_dir)
+    # else:
+    #     model = MMDistributedDataParallel(
+    #         model.cuda(),
+    #         device_ids=[torch.cuda.current_device()],
+    #         broadcast_buffers=False)
+    #     outputs = multi_gpu_test(model, data_loader, args.tmpdir,
+    #                              args.gpu_collect)
+    
+    
+    assert distributed, "Only Distributed testing is supported."
+    model = MMDistributedDataParallel(
             model.cuda(),
             device_ids=[torch.cuda.current_device()],
             broadcast_buffers=False)
-        outputs = multi_gpu_test(model, data_loader, args.tmpdir,
-                                 args.gpu_collect)
+    outputs = multi_gpu_test(model, data_loader, args.tmpdir,
+                             args.gpu_collect)
 
     rank, _ = get_dist_info()
     if rank == 0:

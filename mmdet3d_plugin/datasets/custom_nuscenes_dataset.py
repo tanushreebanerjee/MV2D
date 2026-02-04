@@ -48,16 +48,16 @@ class CustomNuScenesDataset(NuScenesDataset):
     def __len__(self):
         return super(CustomNuScenesDataset, self).__len__()
     
-    def filter_data(self):
-        # get 10 random samples for debugging shuffled
-        if True:
-            token = "a7831d4d1db54053a501d0418545fee2"
-            new_data_list = []
-            for info in self.data_list:
-                if info['token'] == token:
-                    new_data_list.append(info)
-            self.data_list = new_data_list
-            return self.data_list
+    # def filter_data(self):
+    #     # get 10 random samples for debugging shuffled
+    #     if True:
+    #         token = "a7831d4d1db54053a501d0418545fee2"
+    #         new_data_list = []
+    #         for info in self.data_list:
+    #             if info['token'] == token:
+    #                 new_data_list.append(info)
+    #         self.data_list = new_data_list
+    #         return self.data_list
         # if self.mini:
         #     # num_samples = 10
         #     original_data_list = self.data_list
@@ -510,214 +510,214 @@ class CustomNuScenesDataset(NuScenesDataset):
 
         input_dict['img_info'] = info
         # also need to add sample_idx and token for evaluation
-        
         if not self.test_mode:
-            try:
-                annos = self.get_ann_info(index, info)
-            except:
-                return self.get_data_info((index + 1) % len(self))
-            input_dict['ann_info'] = annos
-
-            gt_bboxes_3d = annos['gt_bboxes_3d']  # lidar frame confirmed. tensor([[-7.2906, -8.7071, -1.8431,  4.2570,  1.7260,  1.4890,  0.3434]]))
-            gt_labels_3d = annos['gt_labels_3d']
-        
-        gt_bboxes_2d = []  # per-view 2d bboxes
-        gt_bboxes_ignore = []  # per-view 2d bboxes
-        gt_bboxes_2d_to_3d = []  # mapping from per-view 2d bboxes to 3d bboxes
-        gt_labels_2d = []  # mapping from per-view 2d bboxes to 3d bboxes
-        gt_centers2d = []  # per-view 2d centers
-        gt_instances_3d = [] 
-        
-        for cam_i in range(len(image_paths)):
-            ann_2d = self.impath_to_ann2d(image_paths[cam_i])
-            labels_2d = ann_2d['labels']
-            bboxes_2d = ann_2d['bboxes_2d']
-            bboxes_ignore = ann_2d['gt_bboxes_ignore']
-            # cam_name = list(info['images'].keys())[cam_i]
-            # centers_2d = [cam_instance['center_2d'] for cam_instance in info['cam_instances'][cam_name]]
-            cam_instances = info['cam_instances'][list(info['images'].keys())[cam_i]] # [-22.61999903633102, -0.6445254496545357, 38.3287087817548, 1.095, 1.78, 0.695, 0.29442787910795093]
-            lidar_instances = info['instances']
-            # bboxes_cam = ann_2d['bboxes_cam']
             if not self.test_mode:
-                gt_instances_3d.append(cam_instances) 
+                try:
+                    annos = self.get_ann_info(index, info)
+                except:
+                    return self.get_data_info((index + 1) % len(self))
+                input_dict['ann_info'] = annos
+
+                gt_bboxes_3d = annos['gt_bboxes_3d']  # lidar frame confirmed. tensor([[-7.2906, -8.7071, -1.8431,  4.2570,  1.7260,  1.4890,  0.3434]]))
+                gt_labels_3d = annos['gt_labels_3d']
             
-            lidar2cam = extrinsics[cam_i]
-            K = intrinsics[cam_i][:3, :3]          # camera intrinsics
+            gt_bboxes_2d = []  # per-view 2d bboxes
+            gt_bboxes_ignore = []  # per-view 2d bboxes
+            gt_bboxes_2d_to_3d = []  # mapping from per-view 2d bboxes to 3d bboxes
+            gt_labels_2d = []  # mapping from per-view 2d bboxes to 3d bboxes
+            gt_centers2d = []  # per-view 2d centers
+            gt_instances_3d = [] 
             
+            for cam_i in range(len(image_paths)):
+                ann_2d = self.impath_to_ann2d(image_paths[cam_i])
+                labels_2d = ann_2d['labels']
+                bboxes_2d = ann_2d['bboxes_2d']
+                bboxes_ignore = ann_2d['gt_bboxes_ignore']
+                # cam_name = list(info['images'].keys())[cam_i]
+                # centers_2d = [cam_instance['center_2d'] for cam_instance in info['cam_instances'][cam_name]]
+                cam_instances = info['cam_instances'][list(info['images'].keys())[cam_i]] # [-22.61999903633102, -0.6445254496545357, 38.3287087817548, 1.095, 1.78, 0.695, 0.29442787910795093]
+                lidar_instances = info['instances']
+                # bboxes_cam = ann_2d['bboxes_cam']
+                if not self.test_mode:
+                    gt_instances_3d.append(cam_instances) 
+                
+                lidar2cam = extrinsics[cam_i]
+                K = intrinsics[cam_i][:3, :3]          # camera intrinsics
+                
+                
+                if not self.test_mode:
+                # 3D bbox centers in lidar coordinates
+                    proj_bboxes_2d, proj_centers_2d, valid_mask = self.project_3d_boxes_to_2d(gt_bboxes_3d, lidar2cam, K)
+                    
+                    # instead of slicing, keep the same shape
+                    # optionally mark invalid projections as NaN or some sentinel value
+                    proj_centers_2d[~valid_mask] = np.nan
+
+                    # optionally clip them to in-bounds, but don't slice
+                    img_info = self.data_infos_2d[self.imgid_to_dataid[self.impath_to_imgid[image_paths[cam_i]]]]
+                    H, W = img_info['height'], img_info['width']
+                    in_bounds_mask = (proj_centers_2d[:, 0] >= 0) & (proj_centers_2d[:, 0] < W) & \
+                                    (proj_centers_2d[:, 1] >= 0) & (proj_centers_2d[:, 1] < H)
+                    proj_centers_2d[~in_bounds_mask] = np.nan
+                    # proj_bboxes_2d, proj_centers_2d, valid_mask = self.project_3d_bbox_to_2d(gt_bboxes_3d, lidar2cam, K)
+                # self.plot_3d_and_2d_boxes_on_image(
+                #     image_paths[cam_i],
+                #     gt_bboxes_3d,
+                #     bboxes_2d,
+                #     lidar2cam,
+                #     K,
+                #     color_3d=(0, 0, 255),   # red 3D
+                #     color_2d=(0, 255, 0),   # green 2D
+                #     save_path=f"overlay_cam{cam_i}.png"
+                # )
+
+                # centers_lidar = self.get_bbox3d_top_center(gt_bboxes_3d).numpy()
+                # centers_lidar_hom = np.concatenate([centers_lidar, np.ones((len(centers_lidar), 1))], axis=1) #(45, 4)
+
+                # Transform to camera coordinates
+                # centers_cam = (centers_lidar_hom @ lidar2cam.T)[:, :3]
+                # depths = centers_cam[:, 2]
+
+                # Keep only points in front of the camera
+                # valid_mask = depths > 0
+                # centers_cam = centers_cam[valid_mask]
+                # depths = depths[valid_mask]
+                    # gt_labels_3d_valid = gt_labels_3d[valid_mask]
+
+                # # Project to image plane
+                # proj = centers_cam @ K.T
+                # proj_uv = proj[:, :2] / proj[:, 2:3]  # (N, 2) pixel coordinates
+
+                # 2D bbox centers
+                cx = (bboxes_2d[:, 0] + bboxes_2d[:, 2]) / 2
+                cy = (bboxes_2d[:, 1] + bboxes_2d[:, 3]) / 2
+                centers_2d = np.stack([cx, cy], axis=-1)
+                
+                # remove out of bounds proj_centers_2d
+                if not self.test_mode:
+                    img_info = self.data_infos_2d[self.imgid_to_dataid[self.impath_to_imgid[image_paths[cam_i]]]]
+                    # H, W = img_info['height'], img_info['width']
+                    # in_bounds_mask = (proj_centers_2d[:, 0] >= 0) & (proj_centers_2d[:, 0] < W) & \
+                    #                 (proj_centers_2d[:, 1] >= 0) & (proj_centers_2d[:, 1] < H)
+                    # proj_centers_2d[~in_bounds_mask] = np.nan
+                
+                    # Match projected 3D centers to 2D bbox centers
+                    # match = self.center_match_2d(centers_2d, proj_uv)
+                
+                    # match = self.center_match_2d(centers_2d, proj_centers_2d)
+                    match = self.hungarian_center_match_2d(
+                        centers_2d,
+                        proj_centers_2d,
+                        labels_2d,
+                        gt_labels_3d,
+                    )
+                    
+                    m = match[match >= 0]
+                    assert len(m) == len(np.unique(m)), "Duplicate matches found!"
+                    
+                    # image_size = (H, W)
+                    # match = self.iou_match_2d(bboxes_2d, proj_bboxes_2d, iou_thresh=0.5)
+                    # match = self.iou_match_2d_clipped(bboxes_2d, proj_bboxes_2d, image_size, iou_thresh=0.5)
+                    
+                # assert (labels_2d[match > -1] == gt_labels_3d_valid[match[match > -1]]).all()
+                
+                # plot 2d centers and projected 3d centers
+                # def plot_centers(image_path, centers_2d, proj_centers_2d, match, save_path="centers.png"):
+                #     img = cv2.imread(image_path)
+                #     # remove nans from proj_centers_2d
+                #     proj_centers_2d = np.nan_to_num(proj_centers_2d, nan=-1)
+                #     for i, c in enumerate(centers_2d.astype(int)):
+                #         if match.sum() > 0:
+                #             color = (0, 255, 0) if match[i] > -1 else (0, 255, 255) # green for match, yellow for no match
+                #         else:
+                #             color = (0, 255, 255) # yellow for no match
+                #         cv2.circle(img, tuple(c), 5, color, -1)
+                #     for i, c in enumerate(proj_centers_2d.astype(int)):
+                #         cv2.circle(img, tuple(c), 3, (255, 0, 0), -1) # blue for projected 3d center
+                #     cv2.imwrite(save_path, img)
+                #     plt.figure(figsize=(12, 8))
+                #     plt.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+                #     plt.axis("off")
+                #     plt.savefig(save_path.replace(".png", "_plt.png"), bbox_inches="tight", dpi=300)
+                #     plt.close()
+                # plot_centers(image_paths[cam_i], centers_2d, proj_centers_2d, match, save_path=f"centers_cam{cam_i}_idx{index}.png")
+
+                gt_bboxes_2d.append(bboxes_2d)
+                if not self.test_mode:
+                    gt_bboxes_2d_to_3d.append(match)
+                gt_labels_2d.append(labels_2d)
+                gt_bboxes_ignore.append(bboxes_ignore)
+                gt_centers2d.append(centers_2d)
             
+            if self.test_mode:
+                annos = dict()
+            annos['gt_bboxes'] = gt_bboxes_2d
+            annos['gt_bboxes_labels'] = gt_labels_2d
             if not self.test_mode:
-            # 3D bbox centers in lidar coordinates
-                proj_bboxes_2d, proj_centers_2d, valid_mask = self.project_3d_boxes_to_2d(gt_bboxes_3d, lidar2cam, K)
-                
-                # instead of slicing, keep the same shape
-                # optionally mark invalid projections as NaN or some sentinel value
-                proj_centers_2d[~valid_mask] = np.nan
-
-                # optionally clip them to in-bounds, but don't slice
-                img_info = self.data_infos_2d[self.imgid_to_dataid[self.impath_to_imgid[image_paths[cam_i]]]]
-                H, W = img_info['height'], img_info['width']
-                in_bounds_mask = (proj_centers_2d[:, 0] >= 0) & (proj_centers_2d[:, 0] < W) & \
-                                (proj_centers_2d[:, 1] >= 0) & (proj_centers_2d[:, 1] < H)
-                proj_centers_2d[~in_bounds_mask] = np.nan
-                # proj_bboxes_2d, proj_centers_2d, valid_mask = self.project_3d_bbox_to_2d(gt_bboxes_3d, lidar2cam, K)
-            # self.plot_3d_and_2d_boxes_on_image(
-            #     image_paths[cam_i],
-            #     gt_bboxes_3d,
-            #     bboxes_2d,
-            #     lidar2cam,
-            #     K,
-            #     color_3d=(0, 0, 255),   # red 3D
-            #     color_2d=(0, 255, 0),   # green 2D
-            #     save_path=f"overlay_cam{cam_i}.png"
-            # )
-
-            # centers_lidar = self.get_bbox3d_top_center(gt_bboxes_3d).numpy()
-            # centers_lidar_hom = np.concatenate([centers_lidar, np.ones((len(centers_lidar), 1))], axis=1) #(45, 4)
-
-            # Transform to camera coordinates
-            # centers_cam = (centers_lidar_hom @ lidar2cam.T)[:, :3]
-            # depths = centers_cam[:, 2]
-
-            # Keep only points in front of the camera
-            # valid_mask = depths > 0
-            # centers_cam = centers_cam[valid_mask]
-            # depths = depths[valid_mask]
-                # gt_labels_3d_valid = gt_labels_3d[valid_mask]
-
-            # # Project to image plane
-            # proj = centers_cam @ K.T
-            # proj_uv = proj[:, :2] / proj[:, 2:3]  # (N, 2) pixel coordinates
-
-            # 2D bbox centers
-            cx = (bboxes_2d[:, 0] + bboxes_2d[:, 2]) / 2
-            cy = (bboxes_2d[:, 1] + bboxes_2d[:, 3]) / 2
-            centers_2d = np.stack([cx, cy], axis=-1)
-            
-            # remove out of bounds proj_centers_2d
+                annos['gt_bboxes_2d_to_3d'] = gt_bboxes_2d_to_3d.copy()
+            annos['gt_bboxes_ignore'] = gt_bboxes_ignore
+            annos['centers_2d'] = gt_centers2d
             if not self.test_mode:
-                img_info = self.data_infos_2d[self.imgid_to_dataid[self.impath_to_imgid[image_paths[cam_i]]]]
-                # H, W = img_info['height'], img_info['width']
-                # in_bounds_mask = (proj_centers_2d[:, 0] >= 0) & (proj_centers_2d[:, 0] < W) & \
-                #                 (proj_centers_2d[:, 1] >= 0) & (proj_centers_2d[:, 1] < H)
-                # proj_centers_2d[~in_bounds_mask] = np.nan
+                annos['gt_instances_3d'] = gt_instances_3d
+            annos['gt_bboxes_3d'] = gt_bboxes_3d
+            # gt_instances_3d in cam frame. use mapping to get lidar frame boxes
+            for cam_idx in range(len(gt_instances_3d)):
+                for box_idx in range(len(gt_instances_3d[cam_idx])):
+                    lidar_box_idx = cam_to_lidar_box_mapping[(cam_idx, box_idx)]
+                    if lidar_box_idx >= 0 and lidar_box_idx < len(gt_bboxes_3d):
+                        bbox_3d_lidar = gt_bboxes_3d.tensor[lidar_box_idx].numpy()
+                        gt_instances_3d[cam_idx][box_idx]['bbox_3d'] = bbox_3d_lidar 
+            annos['gt_instances_3d_lidar'] = gt_instances_3d_lidar
             
-                # Match projected 3D centers to 2D bbox centers
-                # match = self.center_match_2d(centers_2d, proj_uv)
-            
-                # match = self.center_match_2d(centers_2d, proj_centers_2d)
-                match = self.hungarian_center_match_2d(
-                    centers_2d,
-                    proj_centers_2d,
-                    labels_2d,
-                    gt_labels_3d,
-                )
-                
-                m = match[match >= 0]
-                assert len(m) == len(np.unique(m)), "Duplicate matches found!"
-                
-                # image_size = (H, W)
-                # match = self.iou_match_2d(bboxes_2d, proj_bboxes_2d, iou_thresh=0.5)
-                # match = self.iou_match_2d_clipped(bboxes_2d, proj_bboxes_2d, image_size, iou_thresh=0.5)
-                
-            # assert (labels_2d[match > -1] == gt_labels_3d_valid[match[match > -1]]).all()
-            
-            # plot 2d centers and projected 3d centers
-            # def plot_centers(image_path, centers_2d, proj_centers_2d, match, save_path="centers.png"):
-            #     img = cv2.imread(image_path)
-            #     # remove nans from proj_centers_2d
-            #     proj_centers_2d = np.nan_to_num(proj_centers_2d, nan=-1)
-            #     for i, c in enumerate(centers_2d.astype(int)):
-            #         if match.sum() > 0:
-            #             color = (0, 255, 0) if match[i] > -1 else (0, 255, 255) # green for match, yellow for no match
-            #         else:
-            #             color = (0, 255, 255) # yellow for no match
-            #         cv2.circle(img, tuple(c), 5, color, -1)
-            #     for i, c in enumerate(proj_centers_2d.astype(int)):
-            #         cv2.circle(img, tuple(c), 3, (255, 0, 0), -1) # blue for projected 3d center
-            #     cv2.imwrite(save_path, img)
-            #     plt.figure(figsize=(12, 8))
-            #     plt.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
-            #     plt.axis("off")
-            #     plt.savefig(save_path.replace(".png", "_plt.png"), bbox_inches="tight", dpi=300)
-            #     plt.close()
-            # plot_centers(image_paths[cam_i], centers_2d, proj_centers_2d, match, save_path=f"centers_cam{cam_i}_idx{index}.png")
-
-            gt_bboxes_2d.append(bboxes_2d)
-            if not self.test_mode:
-                gt_bboxes_2d_to_3d.append(match)
-            gt_labels_2d.append(labels_2d)
-            gt_bboxes_ignore.append(bboxes_ignore)
-            gt_centers2d.append(centers_2d)
-        
-        if self.test_mode:
-            annos = dict()
-        annos['gt_bboxes'] = gt_bboxes_2d
-        annos['gt_bboxes_labels'] = gt_labels_2d
-        if not self.test_mode:
-            annos['gt_bboxes_2d_to_3d'] = gt_bboxes_2d_to_3d.copy()
-        annos['gt_bboxes_ignore'] = gt_bboxes_ignore
-        annos['centers_2d'] = gt_centers2d
-        if not self.test_mode:
+            # replace gt_instances_3d in annos with those in lidar frame
             annos['gt_instances_3d'] = gt_instances_3d
-        annos['gt_bboxes_3d'] = gt_bboxes_3d
-        # gt_instances_3d in cam frame. use mapping to get lidar frame boxes
-        for cam_idx in range(len(gt_instances_3d)):
-            for box_idx in range(len(gt_instances_3d[cam_idx])):
-                lidar_box_idx = cam_to_lidar_box_mapping[(cam_idx, box_idx)]
-                if lidar_box_idx >= 0 and lidar_box_idx < len(gt_bboxes_3d):
-                    bbox_3d_lidar = gt_bboxes_3d.tensor[lidar_box_idx].numpy()
-                    gt_instances_3d[cam_idx][box_idx]['bbox_3d'] = bbox_3d_lidar 
-        annos['gt_instances_3d_lidar'] = gt_instances_3d_lidar
-        
-        # replace gt_instances_3d in annos with those in lidar frame
-        annos['gt_instances_3d'] = gt_instances_3d
-        
-        # data_list = []
-        # data_info = super().parse_data_info(info)
-        # for idx, (cam_id, img_info) in enumerate(data_info['images'].items()):
-        #     num_cameras = 6
-        #     data_info['sample_idx'] = data_info['sample_idx'] * num_cameras + idx
-        #     data_info['token'] = data_info['token']
-        #     data_info['ego2global'] = data_info['ego2global']
-
-        #     if not self.test_mode:
-        #         # used in traing
-        #         data_info['ann_info'] = self.parse_ann_info(data_info)
-        #     if self.test_mode and self.load_eval_anns:
-        #         data_info['eval_ann_info'] = \
-        #             self.parse_ann_info(data_info)
-        #     data_list.append(data_info)
-
-
-        # add sample_idx and token for evaluation
-        input_dict['sample_idx'] = info['sample_idx']
-        input_dict['token'] = info['token']
-        
-        # input_dict['images']['CAM_FRONT']['lidar2cam']
-        lidar2cam = [np.array(cam_info['lidar2cam']) for cam_type, cam_info in info['images'].items()]
-        
-        input_dict['lidar2cam'] = lidar2cam
-        
-        # 2d bboxes gt. make a list of InstanceData for each view
-        # add blank bboxes labels centers_2d as default
-        gt_instances = [InstanceData(
-            bboxes=torch.tensor([]).float(),
-            labels=torch.tensor([]).long(),
-            # bboxes_2d_to_3d=torch.tensor([]).long(),
-            centers_2d=torch.tensor([]).float(),
-            ) for _ in range(len(image_paths))]
-        for cam_i in range(len(image_paths)):
-            gt_instances[cam_i].bboxes = annos['gt_bboxes'][cam_i]
-            gt_instances[cam_i].labels = annos['gt_bboxes_labels'][cam_i]
-            if not self.test_mode:
-                gt_instances[cam_i].bboxes_2d_to_3d = annos['gt_bboxes_2d_to_3d'][cam_i].copy()
-            gt_instances[cam_i].centers_2d = annos['centers_2d'][cam_i]
             
-        input_dict['gt_instances'] = gt_instances
-        input_dict['ann_info'] = annos
-        
-        
-        # gt_instances_3d_lidar
+            # data_list = []
+            # data_info = super().parse_data_info(info)
+            # for idx, (cam_id, img_info) in enumerate(data_info['images'].items()):
+            #     num_cameras = 6
+            #     data_info['sample_idx'] = data_info['sample_idx'] * num_cameras + idx
+            #     data_info['token'] = data_info['token']
+            #     data_info['ego2global'] = data_info['ego2global']
+
+            #     if not self.test_mode:
+            #         # used in traing
+            #         data_info['ann_info'] = self.parse_ann_info(data_info)
+            #     if self.test_mode and self.load_eval_anns:
+            #         data_info['eval_ann_info'] = \
+            #             self.parse_ann_info(data_info)
+            #     data_list.append(data_info)
+
+
+            # add sample_idx and token for evaluation
+            input_dict['sample_idx'] = info['sample_idx']
+            input_dict['token'] = info['token']
+            
+            # input_dict['images']['CAM_FRONT']['lidar2cam']
+            lidar2cam = [np.array(cam_info['lidar2cam']) for cam_type, cam_info in info['images'].items()]
+            
+            input_dict['lidar2cam'] = lidar2cam
+            
+            # 2d bboxes gt. make a list of InstanceData for each view
+            # add blank bboxes labels centers_2d as default
+            gt_instances = [InstanceData(
+                bboxes=torch.tensor([]).float(),
+                labels=torch.tensor([]).long(),
+                # bboxes_2d_to_3d=torch.tensor([]).long(),
+                centers_2d=torch.tensor([]).float(),
+                ) for _ in range(len(image_paths))]
+            for cam_i in range(len(image_paths)):
+                gt_instances[cam_i].bboxes = annos['gt_bboxes'][cam_i]
+                gt_instances[cam_i].labels = annos['gt_bboxes_labels'][cam_i]
+                if not self.test_mode:
+                    gt_instances[cam_i].bboxes_2d_to_3d = annos['gt_bboxes_2d_to_3d'][cam_i].copy()
+                gt_instances[cam_i].centers_2d = annos['centers_2d'][cam_i]
+                
+            input_dict['gt_instances'] = gt_instances
+            input_dict['ann_info'] = annos
+            
+            
+            # gt_instances_3d_lidar
         
         return copy.deepcopy(input_dict)
     

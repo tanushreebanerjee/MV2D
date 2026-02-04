@@ -446,6 +446,16 @@ class QueryGenerator(BaseModule):
         center_pred = self.fc_center(x_center) if self.with_center else None
         attr_pred = self.fc_attr(x_attr) if self.with_attr else None
 
+        # make +ve depth for debugging
+        DEPTH_MIN = 1.0
+        DEPTH_MAX = 60.0
+        LOGIT_SCALE = 4.0  # tune if needed
+
+        center_pred[:, 2] = DEPTH_MIN + (DEPTH_MAX - DEPTH_MIN) * torch.sigmoid(
+            center_pred[:, 2] / LOGIT_SCALE
+        )
+
+        # center_pred[:, 2] = 1.0 + torch.nn.functional.softplus(torch.sigmoid(center_pred[:, 2]) * 60.0 - 1.0)
         center_lidar = self.center2lidar(center_pred, intrinsics, extrinsics, lidar2img=None) # lidar2img
 
         return center_lidar, return_feats
