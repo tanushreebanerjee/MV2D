@@ -11,6 +11,7 @@
 import numpy as np
 from numpy import random
 import mmcv
+import mmengine
 # from mmdet.datasets.builder import PIPELINES
 from mmdet3d.structures.points import BasePoints, get_points_type
 from mmdet3d.structures.bbox_3d import (CameraInstance3DBoxes, DepthInstance3DBoxes,
@@ -261,7 +262,7 @@ class ResizeMultiview3D:
                 self.img_scale = img_scale
             else:
                 self.img_scale = [img_scale]
-            assert mmcv.is_list_of(self.img_scale, tuple)
+            assert mmengine.utils.is_list_of(self.img_scale, tuple)
 
         if ratio_range is not None:
             # mode 1: given a scale and a range of image ratio
@@ -289,7 +290,7 @@ class ResizeMultiview3D:
                 ``scale_idx`` is the selected index in the given candidates.
         """
 
-        assert mmcv.is_list_of(img_scales, tuple)
+        assert mmengine.utils.is_list_of(img_scales, tuple)
         scale_idx = np.random.randint(len(img_scales))
         img_scale = img_scales[scale_idx]
         return img_scale, scale_idx
@@ -307,7 +308,7 @@ class ResizeMultiview3D:
                 to be consistent with :func:`random_select`.
         """
 
-        assert mmcv.is_list_of(img_scales, tuple) and len(img_scales) == 2
+        assert mmengine.utils.is_list_of(img_scales, tuple) and len(img_scales) == 2
         img_scale_long = [max(s) for s in img_scales]
         img_scale_short = [min(s) for s in img_scales]
         long_edge = np.random.randint(
@@ -452,6 +453,51 @@ class ResizeMultiview3D:
         repr_str += f'ratio_range={self.ratio_range}, '
         repr_str += f'keep_ratio={self.keep_ratio}, '
         return repr_str
+
+
+@PIPELINES.register_module()
+class ResizeMultiview3DWithBBoxes(ResizeMultiview3D):
+    """
+    Resize images AND properly scale 2D bounding boxes.
+    No cropping. No flipping. No chaos.
+    """
+
+    def _resize_img(self, results):
+        super()._resize_img(results)
+
+        # Nothing to scale if 2D boxes aren't present
+        if 'gt_bboxes_2d' not in results:
+            return
+
+        scale_factors = results['scale_factor']
+
+        resized_boxes = []
+        resized_ignore = []
+
+        gt_bboxes_2d = results['gt_bboxes_2d']
+        gt_bboxes_ignore = results.get('gt_bboxes_ignore', None)
+
+        for i, boxes in enumerate(gt_bboxes_2d):
+
+            if len(boxes) == 0:
+                resized_boxes.append(boxes)
+                if gt_bboxes_ignore is not None:
+                    resized_ignore.append(gt_bboxes_ignore[i])
+                continue
+
+            scale = scale_factors[i]  # [w_scale, h_scale, w_scale, h_scale]
+            resized_boxes.append(boxes * scale)
+
+            if gt_bboxes_ignore is not None:
+                resized_ignore.append(gt_bboxes_ignore[i] * scale)
+
+        results['gt_bboxes_2d'] = resized_boxes
+
+        if gt_bboxes_ignore is not None:
+            results['gt_bboxes_ignore'] = resized_ignore
+
+
+
 
 
 @PIPELINES.register_module()
@@ -607,8 +653,9 @@ class ResizeCropFlipImageMono(ResizeCropFlipImage):
                 bboxes_2d_to_3d = gt_bboxes_2d_to_3d[i]
                 bboxes_ignore = gt_bboxes_ignore[i]
                 # 1. resize
-                bboxes_2d = bboxes_2d * resize
-                bboxes_ignore = bboxes_ignore * resize
+                resize_2 = (0.8, 0.5689, 0.8, 0.5689) # TODO: dont hardcode!!
+                bboxes_2d = bboxes_2d * resize_2
+                bboxes_ignore = bboxes_ignore * resize_2
                 # 2. crop and filter out-of-image bboxes
                 bboxes_2d[:, 0::2] = np.clip(bboxes_2d[:, 0::2], crop[0], crop[2])
                 bboxes_2d[:, 1::2] = np.clip(bboxes_2d[:, 1::2], crop[1], crop[3])
