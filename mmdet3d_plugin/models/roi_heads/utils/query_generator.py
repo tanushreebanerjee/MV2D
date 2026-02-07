@@ -458,8 +458,8 @@ class QueryGenerator(BaseModule):
         # why do the logit scale? A: to make the gradient larger in the middle range. because sigmoid gradient is small at the edges.
         
         # DEBUG: force center x and y to be 0, 0. forces learning only depth
-        center_pred[:, 0] = 0.0
-        center_pred[:, 1] = 0.0
+        # center_pred[:, 0] = 0.0
+        # center_pred[:, 1] = 0.0
 
         center_lidar = self.center2lidar(center_pred, intrinsics, extrinsics, lidar2img=None) # lidar2img
 
