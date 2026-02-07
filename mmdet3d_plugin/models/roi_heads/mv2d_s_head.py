@@ -127,7 +127,7 @@ class MV2DSHead(MV2DHead):
     def _bbox_forward_denoise(self, x, proposal_list, img_metas):
         # avoid empty 2D detection
         if sum([len(p) for p in proposal_list]) == 0:
-            proposal = torch.tensor([[0, 50, 50, 100, 100, 0]], dtype=proposal_list[0].dtype,
+            proposal = torch.tensor([[0, 50, 50, 100, 1.0, 0]], dtype=proposal_list[0].dtype,
                                     device=proposal_list[0].device)
             proposal_list = [proposal] + proposal_list[1:]
 

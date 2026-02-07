@@ -453,9 +453,14 @@ class QueryGenerator(BaseModule):
 
         center_pred[:, 2] = DEPTH_MIN + (DEPTH_MAX - DEPTH_MIN) * torch.sigmoid(
             center_pred[:, 2] / LOGIT_SCALE
-        )
+        ) 
+        # what is the range of this? A: 0 to 1 before scaling.
+        # why do the logit scale? A: to make the gradient larger in the middle range. because sigmoid gradient is small at the edges.
+        
+        # DEBUG: force center x and y to be 0, 0. forces learning only depth
+        center_pred[:, 0] = 0.0
+        center_pred[:, 1] = 0.0
 
-        # center_pred[:, 2] = 1.0 + torch.nn.functional.softplus(torch.sigmoid(center_pred[:, 2]) * 60.0 - 1.0)
         center_lidar = self.center2lidar(center_pred, intrinsics, extrinsics, lidar2img=None) # lidar2img
 
         return center_lidar, return_feats
