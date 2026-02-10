@@ -242,16 +242,18 @@ class CrossAttentionBoxHead(BaseModule):
             assert reference.shape[-1] == 3
             outputs_class = self.cls_branches[lvl](outs_dec[lvl])
             tmp = self.reg_branches[lvl](outs_dec[lvl])
-
-            tmp[..., 0:2] += reference[..., 0:2]
-            tmp[..., 0:2] = tmp[..., 0:2].sigmoid()
-            tmp[..., 4:5] += reference[..., 2:3]
-            tmp[..., 4:5] = tmp[..., 4:5].sigmoid()
             
-            # tmp[..., 0:2] = reference[..., 0:2]
+            # predict offset
+            # tmp[..., 0:2] += reference[..., 0:2]
             # tmp[..., 0:2] = tmp[..., 0:2].sigmoid()
-            # tmp[..., 4:5] = reference[..., 2:3]
+            # tmp[..., 4:5] += reference[..., 2:3]
             # tmp[..., 4:5] = tmp[..., 4:5].sigmoid()
+            
+            # predict center
+            tmp[..., 0:2] = reference[..., 0:2]
+            tmp[..., 0:2] = tmp[..., 0:2].sigmoid()
+            tmp[..., 4:5] = reference[..., 2:3]
+            tmp[..., 4:5] = tmp[..., 4:5].sigmoid()
 
             outputs_coord = tmp
             outputs_classes.append(outputs_class)
