@@ -48,16 +48,16 @@ class CustomWaymoDataset(WaymoDataset):
     def __len__(self):
         return super(CustomWaymoDataset, self).__len__()
     
-    def filter_data(self):
-        # get 10 random samples for debugging shuffled
-        if True:
-            token = "1121114"
-            new_data_list = []
-            for info in self.data_list:
-                if info['token'] == token:
-                    new_data_list.append(info)
-            self.data_list = new_data_list
-            return self.data_list
+    # def filter_data(self):
+    #     # get 10 random samples for debugging shuffled
+    #     if True:
+    #         token = "1121114"
+    #         new_data_list = []
+    #         for info in self.data_list:
+    #             if info['token'] == token:
+    #                 new_data_list.append(info)
+    #         self.data_list = new_data_list
+    #         return self.data_list
         # if self.mini:
         #     # num_samples = 10
         #     original_data_list = self.data_list
@@ -1258,7 +1258,7 @@ class CustomWaymoDataset(WaymoDataset):
             for idx, (cam_id, img_info) in enumerate(data_info['images'].items()):
                 num_cameras = 6
                 data_info['sample_idx'] = data_info['sample_idx'] * num_cameras + idx
-                data_info['token'] = data_info['token']
+                data_info['token'] = data_info['sample_idx']
                 data_info['ego2global'] = data_info['ego2global']
 
                 if not self.test_mode:
