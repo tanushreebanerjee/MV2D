@@ -947,7 +947,8 @@ class CustomWaymoDataset(WaymoDataset):
         ann = info['ann_info']
         
         # filter out bbox containing no points
-        if self.use_valid_flag and 'bbox_3d_isvalid' in ann:
+        # if self.use_valid_flag and 'bbox_3d_isvalid' in ann:
+        if 'bbox_3d_isvalid' in ann: # self.use_valid_flag and 
             # mask = info['valid_flag']
             mask = ann['bbox_3d_isvalid']
         elif 'num_lidar_pts' in ann:
