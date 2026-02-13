@@ -130,6 +130,14 @@ class MV2DSHead(MV2DHead):
             proposal = torch.tensor([[0, 50, 50, 100, 1.0, 0]], dtype=proposal_list[0].dtype,
                                     device=proposal_list[0].device)
             proposal_list = [proposal] + proposal_list[1:]
+        
+
+        for i in range(len(proposal_list)):
+            proposal_i = proposal_list[i]
+            if proposal_i.shape[1] == 5 and proposal_i.shape[0]==0:
+                proposal_i = torch.zeros((0, 4), dtype=proposal_i.dtype, device=proposal_i.device)
+                proposal_list[i] = proposal_i
+                
 
         rois = bbox2roi(proposal_list)
         # DEBUG: rois are built from proposal_list; shapes/types may vary

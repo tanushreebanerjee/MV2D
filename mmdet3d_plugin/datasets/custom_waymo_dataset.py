@@ -445,9 +445,17 @@ class CustomWaymoDataset(WaymoDataset):
         gt_instances_3d_lidar = info['instances']
         # ego2global = info['ego2global']
         images = {}
+        cam_type2cam_id = {
+            "CAM_FRONT": 0,
+            "CAM_FRONT_LEFT": 1,
+            "CAM_FRONT_RIGHT": 2,
+            "CAM_SIDE_LEFT": 3,
+            "CAM_SIDE_RIGHT": 4
+        }
         for cam_type, cam_info in info['images'].items():
             # img_timestamp.append(cam_info['timestamp'] / 1e6)
-            img_path = os.path.join(self.data_root, 'samples', cam_type, cam_info['img_path'].split("/")[-1])
+            cam_id = cam_type2cam_id[cam_type]
+            img_path = os.path.join(self.data_root, 'training', f'image_{cam_id}/', cam_info['img_path'].split("/")[-1])
             image_paths.append(img_path)
             # obtain lidar to image transformation matrix
             # lidar2cam_r = np.linalg.inv(cam_info['sensor2lidar_rotation'])
