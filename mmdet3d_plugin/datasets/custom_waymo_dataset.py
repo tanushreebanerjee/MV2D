@@ -440,13 +440,13 @@ class CustomWaymoDataset(WaymoDataset):
         lidar2img_rts = []
         intrinsics = []
         extrinsics = []
-        img_timestamp = []
+        # img_timestamp = []
         gt_instances_3d = []
         gt_instances_3d_lidar = info['instances']
         # ego2global = info['ego2global']
         images = {}
         for cam_type, cam_info in info['images'].items():
-            img_timestamp.append(cam_info['timestamp'] / 1e6)
+            # img_timestamp.append(cam_info['timestamp'] / 1e6)
             img_path = os.path.join(self.data_root, 'samples', cam_type, cam_info['img_path'].split("/")[-1])
             image_paths.append(img_path)
             # obtain lidar to image transformation matrix
@@ -503,7 +503,7 @@ class CustomWaymoDataset(WaymoDataset):
         # now all boxes in gt_instances_3d are in lidar frame
         input_dict.update(
             dict(
-                img_timestamp=img_timestamp,
+                # img_timestamp=img_timestamp,
                 img_filename=image_paths,
                 lidar2img=lidar2img_rts,
                 intrinsics=intrinsics,
