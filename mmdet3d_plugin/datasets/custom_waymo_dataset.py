@@ -19,7 +19,7 @@ from nuscenes.eval.common.data_classes import EvalBoxes
 import mmcv
 from mmdet.datasets.api_wrappers import COCO
 from mmdet.registry import DATASETS 
-from mmdet3d.datasets.nuscenes_dataset import NuScenesDataset
+from mmdet3d.datasets.waymo_dataset import WaymoDataset
 # from mmdet3d.datasets import NuScenesMonoDataset, NuScenesDataset
 import os
 import copy
@@ -33,25 +33,25 @@ from typing import Callable, List, Union
 from mmengine.structures import InstanceData
 from torchvision.ops import box_iou
 @DATASETS.register_module()
-class CustomNuScenesDataset(NuScenesDataset):
-    r"""NuScenesMono Dataset.
+class CustomWaymoDataset(WaymoDataset):
+    r"""Waymo Dataset.
     This dataset add camera intrinsics and extrinsics and 2d bbox to the results.
     """
     def __init__(self, ann_file_2d, mini=False, load_separate=False, **kwargs):
         self.load_separate = load_separate
         self.ann_file_2d = ann_file_2d
         self.mini = mini
-        super(CustomNuScenesDataset, self).__init__(**kwargs)
+        super(CustomWaymoDataset, self).__init__(**kwargs)
         self.load_annotations_2d(ann_file_2d)
         self.with_velocity  = False
     
     def __len__(self):
-        return super(CustomNuScenesDataset, self).__len__()
+        return super(CustomWaymoDataset, self).__len__()
     
     def filter_data(self):
         # get 10 random samples for debugging shuffled
         if True:
-            token = "a7831d4d1db54053a501d0418545fee2"
+            token = "1121114"
             new_data_list = []
             for info in self.data_list:
                 if info['token'] == token:
@@ -147,13 +147,21 @@ class CustomNuScenesDataset(NuScenesDataset):
         self.imgid_to_dataid = {}
         data_infos = []
         total_ann_ids = []
+        cam_type2cam_id = {
+            "CAM_FRONT": 0,
+            "CAM_FRONT_LEFT": 1,
+            "CAM_FRONT_RIGHT": 2,
+            "CAM_SIDE_LEFT": 3,
+            "CAM_SIDE_RIGHT": 4
+        }
         for i in self.coco.get_img_ids():
             info = self.coco.load_imgs([i])[0]
             info['filename'] = info['file_name']
             cam_type = info['camera_type']
-            self.impath_to_imgid['data/nuscenes/' 
-                                 + 'samples/'
-                                 + f"{cam_type}/"
+            cam_id = cam_type2cam_id[cam_type]
+            self.impath_to_imgid['data/waymo/kitti_format/' 
+                                 + 'training/'
+                                 + f"image_{cam_id}/"
                                  + info['file_name']] = i
             self.imgid_to_dataid[i] = len(data_infos)
             data_infos.append(info)
