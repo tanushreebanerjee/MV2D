@@ -60,15 +60,15 @@ class CustomNuScenesDataset(NuScenesDataset):
         return super(CustomNuScenesDataset, self).__len__()
     
     # def filter_data(self):
-    #     # get 10 random samples for debugging shuffled
-    #     if True:
-    #         token = "a7831d4d1db54053a501d0418545fee2"
-    #         new_data_list = []
-    #         for info in self.data_list:
-    #             if info['token'] == token:
-    #                 new_data_list.append(info)
-    #         self.data_list = new_data_list
-    #         return self.data_list
+        # get 10 random samples for debugging shuffled
+        # if True:
+        #     token = "a7831d4d1db54053a501d0418545fee2"
+        #     new_data_list = []
+        #     for info in self.data_list:
+        #         if info['token'] == token:
+        #             new_data_list.append(info)
+        #     self.data_list = new_data_list
+        #     return self.data_list
         # if self.mini:
         #     # num_samples = 10
         #     original_data_list = self.data_list

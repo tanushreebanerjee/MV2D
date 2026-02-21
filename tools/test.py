@@ -17,7 +17,7 @@ from mmengine.dist.utils import get_dist_info, init_dist
 from mmengine.runner.checkpoint import load_checkpoint
 
 import mmdet
-from mmdet3d.apis import single_gpu_test
+# from mmdet3d.apis import single_gpu_test
 from mmdet3d.datasets import build_dataloader, build_dataset
 from mmdet3d.models import build_model
 from mmdet.apis import multi_gpu_test, set_random_seed

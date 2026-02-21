@@ -82,9 +82,42 @@ class TwoStageDetBase(TwoStageDetector):
         assert self.with_bbox, 'Bbox head must be implemented.'
         x = feat
         if proposals is None:
-            proposal_list = self.rpn_head.simple_test_rpn(x, img_metas)
+            # proposal_list = self.rpn_head.simple_test_rpn(x, img_metas)
+            # Use the new predict API instead of simple_test_rpn
+            # Create dummy batch_data_samples with metainfo
+            batch_data_samples = []
+            for img_meta in img_metas:
+                data_sample = type('obj', (object,), {'metainfo': img_meta})()
+                batch_data_samples.append(data_sample)
+            
+            # Get RPN predictions (returns list of InstanceData)
+            rpn_results_list = self.rpn_head.predict(
+                x, batch_data_samples, rescale=False)
         else:
-            proposal_list = proposals
+            # proposal_list = proposals
+            # Convert proposals to InstanceData format
+            from mmengine.structures import InstanceData
+            rpn_results_list = []
+            for proposal in proposals:
+                result = InstanceData()
+                result.bboxes = proposal
+                rpn_results_list.append(result)
 
-        return self.roi_head.simple_test(
-            x, proposal_list, img_metas, rescale=rescale)
+        # Use predict_bbox instead of simple_test
+        results_list = self.roi_head.predict_bbox(
+            x=x,
+            batch_img_metas=img_metas,
+            rpn_results_list=rpn_results_list,
+            rcnn_test_cfg=self.roi_head.test_cfg,
+            rescale=rescale)
+        
+        # Convert InstanceData results to bbox_results format
+        bbox_results = [
+            bbox2result(result.bboxes, result.labels, self.roi_head.bbox_head.num_classes)
+            for result in results_list
+        ]
+        
+        # return self.roi_head.simple_test(
+        #     x, proposal_list, img_metas, rescale=rescale)
+        
+        return bbox_results
