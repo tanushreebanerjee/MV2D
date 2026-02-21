@@ -9,17 +9,17 @@
 # Copyright (c) OpenMMLab. All rights reserved.
 # ------------------------------------------------------------------------
 import json
-import time
 import torch
 import tempfile
 from os import path as osp
 import numpy as np
 import pyquaternion
+from nuscenes.utils.data_classes import Box as NuScenesBox
+from nuscenes.eval.common.data_classes import EvalBoxes
 import mmcv
-import mmengine
 from mmdet.datasets.api_wrappers import COCO
 from mmdet.registry import DATASETS 
-from mmdet3d.datasets.nuscenes_dataset import NuScenesDataset
+from mmdet3d.datasets.kitti_dataset import KittiDataset
 # from mmdet3d.datasets import NuScenesMonoDataset, NuScenesDataset
 import os
 import copy
@@ -29,40 +29,29 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 import numpy as np
 import cv2
-from typing import Callable, Dict, List, Tuple, Union
+from typing import Callable, List, Union
 from mmengine.structures import InstanceData
 from torchvision.ops import box_iou
-
-
-from nuscenes.utils.data_classes import Box as NuScenesBox
-from nuscenes.eval.detection.data_classes import DetectionMetricDataList, DetectionMetrics, DetectionBox, EvalBox
-from nuscenes.eval.detection.evaluate import DetectionEval
-from nuscenes.eval.detection.algo import accumulate, calc_ap, calc_tp
-from nuscenes.eval.detection.constants import TP_METRICS
-from nuscenes.eval.detection.config import config_factory
-import random
-
-
 @DATASETS.register_module()
-class CustomNuScenesDataset(NuScenesDataset):
-    r"""NuScenesMono Dataset.
+class CustomKittiDataset(KittiDataset):
+    r"""Kitti Dataset.
     This dataset add camera intrinsics and extrinsics and 2d bbox to the results.
     """
     def __init__(self, ann_file_2d, mini=False, load_separate=False, **kwargs):
         self.load_separate = load_separate
         self.ann_file_2d = ann_file_2d
         self.mini = mini
-        super(CustomNuScenesDataset, self).__init__(**kwargs)
+        super(CustomKittiDataset, self).__init__(**kwargs)
         self.load_annotations_2d(ann_file_2d)
         self.with_velocity  = False
     
     def __len__(self):
-        return super(CustomNuScenesDataset, self).__len__()
+        return super(CustomKittiDataset, self).__len__()
     
     # def filter_data(self):
     #     # get 10 random samples for debugging shuffled
     #     if True:
-    #         token = "a7831d4d1db54053a501d0418545fee2"
+    #         token = "1121114"
     #         new_data_list = []
     #         for info in self.data_list:
     #             if info['token'] == token:
@@ -119,7 +108,7 @@ class CustomNuScenesDataset(NuScenesDataset):
     
     def load_annotations(self, ann_file):
         data = mmcv.load(ann_file, file_format='pkl')
-        data_infos_ori = data_infos = list(sorted(data['infos'], key=lambda e: e['timestamp']))
+        data_infos_ori = data_infos = list(sorted(data['infos'], key=lambda e: e['sample_idx']))
         data_infos = data_infos[::self.load_interval]
         self.metadata = data['metadata']
         self.version = self.metadata['version']
@@ -162,9 +151,9 @@ class CustomNuScenesDataset(NuScenesDataset):
             info = self.coco.load_imgs([i])[0]
             info['filename'] = info['file_name']
             cam_type = info['camera_type']
-            self.impath_to_imgid['data/nuscenes/' 
-                                 + 'samples/'
-                                 + f"{cam_type}/"
+
+            self.impath_to_imgid['data/kitti/' 
+                                 + 'training/image_2'
                                  + info['file_name']] = i
             self.imgid_to_dataid[i] = len(data_infos)
             data_infos.append(info)
@@ -425,32 +414,26 @@ class CustomNuScenesDataset(NuScenesDataset):
             info = mmcv.load(self.data_list[index], file_format='pkl')
         # standard protocal modified from SECOND.Pytorch
         
-        if 'lidar_sweeps' not in info:
-            # skip to next sample if no sweep
-            return self.get_data_info((index + 1) % len(self))
+        # if 'lidar_sweeps' not in info:
+        #     # skip to next sample if no sweep
+        #     return self.get_data_info((index + 1) % len(self))
         
         input_dict = dict(
             sample_idx=info['sample_idx'],
             token=info['token'],
-            # pts_filename=info['lidar_path'],
-            # sweeps=info['sweeps'],
-            pts_filename=info['lidar_points']['lidar_path'],
-            sweeps=info['lidar_sweeps'],
-            timestamp=info['timestamp'] / 1e6,
         )
 
         image_paths = []
         lidar2img_rts = []
         intrinsics = []
         extrinsics = []
-        img_timestamp = []
         gt_instances_3d = []
         gt_instances_3d_lidar = info['instances']
-        # ego2global = info['ego2global']
         images = {}
+
         for cam_type, cam_info in info['images'].items():
-            img_timestamp.append(cam_info['timestamp'] / 1e6)
-            img_path = os.path.join(self.data_root, 'samples', cam_type, cam_info['img_path'].split("/")[-1])
+            # img_timestamp.append(cam_info['timestamp'] / 1e6)
+            img_path = os.path.join(self.data_root, 'training', 'image_2', cam_info['img_path'].split("/")[-1])
             image_paths.append(img_path)
             # obtain lidar to image transformation matrix
             # lidar2cam_r = np.linalg.inv(cam_info['sensor2lidar_rotation'])
@@ -506,7 +489,7 @@ class CustomNuScenesDataset(NuScenesDataset):
         # now all boxes in gt_instances_3d are in lidar frame
         input_dict.update(
             dict(
-                img_timestamp=img_timestamp,
+                # img_timestamp=img_timestamp,
                 img_filename=image_paths,
                 lidar2img=lidar2img_rts,
                 intrinsics=intrinsics,
@@ -706,7 +689,6 @@ class CustomNuScenesDataset(NuScenesDataset):
             
             # input_dict['images']['CAM_FRONT']['lidar2cam']
             lidar2cam = [np.array(cam_info['lidar2cam']) for cam_type, cam_info in info['images'].items()]
-            
             input_dict['lidar2cam'] = lidar2cam
             
             # 2d bboxes gt. make a list of InstanceData for each view
@@ -950,7 +932,8 @@ class CustomNuScenesDataset(NuScenesDataset):
         ann = info['ann_info']
         
         # filter out bbox containing no points
-        if self.use_valid_flag and 'bbox_3d_isvalid' in ann:
+        # if self.use_valid_flag and 'bbox_3d_isvalid' in ann:
+        if 'bbox_3d_isvalid' in ann: # self.use_valid_flag and 
             # mask = info['valid_flag']
             mask = ann['bbox_3d_isvalid']
         elif 'num_lidar_pts' in ann:
@@ -1136,9 +1119,6 @@ class CustomNuScenesDataset(NuScenesDataset):
         """
         from nuscenes import NuScenes
         from nuscenes.eval.detection.evaluate import NuScenesEval
-        from nuscenes.eval.detection.config import config_factory
-        nusc_config = config_factory('detection_cvpr_2019')
-        self.version = 'v1.0-trainval'
 
         output_dir = osp.join(*osp.split(result_path)[:-1])
         nusc = NuScenes(
@@ -1147,7 +1127,6 @@ class CustomNuScenesDataset(NuScenesDataset):
             'v1.0-mini': 'mini_val',
             'v1.0-trainval': 'val',
         }
-        self.eval_detection_configs = nusc_config
         nusc_eval = NuScenesEval(
             nusc,
             config=self.eval_detection_configs,
@@ -1159,10 +1138,10 @@ class CustomNuScenesDataset(NuScenesDataset):
         nusc_eval.main(render_curves=False)
 
         # record metrics
-        metrics = mmengine.load(osp.join(output_dir, 'metrics_summary.json'))
+        metrics = mmcv.load(osp.join(output_dir, 'metrics_summary.json'))
         detail = dict()
         metric_prefix = f'{result_name}_NuScenes'
-        for name in self.METADATA['classes']:
+        for name in self.CLASSES:
             for k, v in metrics['label_aps'][name].items():
                 val = float('{:.4f}'.format(v))
                 detail['{}/{}_AP_dist_{}'.format(metric_prefix, name, k)] = val
@@ -1262,107 +1241,20 @@ class CustomNuScenesDataset(NuScenesDataset):
         else:
             data_list = []
             data_info = super().parse_data_info(info)
-            # for idx, (cam_id, img_info) in enumerate(data_info['images'].items()):
-            #     num_cameras = 6
-            #     data_info['sample_idx'] = data_info['sample_idx'] * num_cameras + idx
-            #     data_info['token'] = data_info['token']
-            #     data_info['ego2global'] = data_info['ego2global']
+            for idx, (cam_id, img_info) in enumerate(data_info['images'].items()):
+                num_cameras = 6
+                data_info['sample_idx'] = data_info['sample_idx'] * num_cameras + idx
+                data_info['token'] = data_info['sample_idx']
 
-            #     if not self.test_mode:
-            #         # used in traing
-            #         data_info['ann_info'] = self.parse_ann_info(data_info)
-            #     if self.test_mode and self.load_eval_anns:
-            #         data_info['eval_ann_info'] = \
-            #             self.parse_ann_info(data_info)
-            #     data_list.append(data_info)
+                if not self.test_mode:
+                    # used in traing
+                    data_info['ann_info'] = self.parse_ann_info(data_info)
+                if self.test_mode and self.load_eval_anns:
+                    data_info['eval_ann_info'] = \
+                        self.parse_ann_info(data_info)
+                data_list.append(data_info)
             
-            # return data_list
-            return data_info
-    def _format_bbox(self, results, jsonfile_prefix=None):
-        """Convert the results to the standard format.
-
-        Args:
-            results (list[dict]): Testing results of the dataset.
-            jsonfile_prefix (str): The prefix of the output jsonfile.
-                You can specify the output directory/filename by
-                modifying the jsonfile_prefix. Default: None.
-
-        Returns:
-            str: Path of the output json file.
-        """
-        nusc_annos = {}
-        mapped_class_names = self.METAINFO['classes']
-        data_infos = mmengine.load(self.ann_file)['data_list']
-
-        print('Start to convert detection format...')
-        for i, det in enumerate(mmengine.track_iter_progress(results)):
-            annos = []
-            # boxes = output_to_nusc_box(det)
-            # sample_token = self.get_data_info(i)['token']
-            # boxes = parse_predictions(det, boxes, self.CLASSES, self.eval_config) # Aquesta funció pot variar, veure nota a baix
-            
-            # NOTA: Si no tens 'output_to_nusc_box' o funcions auxiliars, 
-            # aquí tens la lògica directa simplificada que sol funcionar:
-            
-            boxes_3d = det['bboxes_3d']
-            scores_3d = det['scores_3d']
-            labels_3d = det['labels_3d']
-
-            # Convertim a CPU i numpy si cal
-            if torch.is_tensor(boxes_3d):
-                boxes_3d = boxes_3d.tensor.cpu().numpy()
-                scores_3d = scores_3d.cpu().numpy()
-                labels_3d = labels_3d.cpu().numpy()
-            
-            # Iterem sobre cada caixa detectada en el frame
-            for k in range(boxes_3d.shape[0]):
-                box = boxes_3d[k]
-                score = float(scores_3d[k])
-                label = int(labels_3d[k])
-                
-                # Coordenades i mides
-                # Nota: depenent del teu model (LiDAR vs Camera), l'ordre pot variar
-                # Això assumeix coordenades LiDAR estàndard [x, y, z, dx, dy, dz, yaw]
-                translation = box[0:3].tolist()
-                size = box[3:6].tolist() # dx, dy, dz
-                
-                # Rotació: NuScenes demana quaternions [w, x, y, z]
-                # Convertim de yaw (radians) a quaternió
-                yaw = box[6]
-                rotation = pyquaternion.Quaternion(axis=[0, 0, 1], radians=yaw).elements.tolist()
-                
-                # Velocitat (si en tens)
-                velocity = [0, 0]
-                if box.shape[0] > 7:
-                    velocity = box[7:9].tolist() # vx, vy
-                
-                # Nom de la classe
-                name = mapped_class_names[label]
-
-                nusc_anno = dict(
-                    sample_token=data_infos[i]['token'],
-                    translation=translation,
-                    size=size,
-                    rotation=rotation,
-                    velocity=velocity,
-                    detection_name=name,
-                    detection_score=score,
-                    attribute_name='') # Atribut buit per defecte
-                
-                annos.append(nusc_anno)
-            
-            nusc_annos[data_infos[i]['token']] = annos
-
-        nusc_submissions = {
-            'meta': self.modality,
-            'results': nusc_annos,
-        }
-
-        mmengine.mkdir_or_exist(jsonfile_prefix)
-        res_path = osp.join(jsonfile_prefix, 'results_nusc.json')
-        print(f'Results writes to {res_path}')
-        mmengine.dump(nusc_submissions, res_path)
-        return res_path
+            return data_list
 
 
 import cv2
