@@ -456,51 +456,6 @@ class ResizeMultiview3D:
 
 
 @PIPELINES.register_module()
-class ResizeMultiview3DWithBBoxes(ResizeMultiview3D):
-    """
-    Resize images AND properly scale 2D bounding boxes.
-    No cropping. No flipping. No chaos.
-    """
-
-    def _resize_img(self, results):
-        super()._resize_img(results)
-
-        # Nothing to scale if 2D boxes aren't present
-        if 'gt_bboxes_2d' not in results:
-            return
-
-        scale_factors = results['scale_factor']
-
-        resized_boxes = []
-        resized_ignore = []
-
-        gt_bboxes_2d = results['gt_bboxes_2d']
-        gt_bboxes_ignore = results.get('gt_bboxes_ignore', None)
-
-        for i, boxes in enumerate(gt_bboxes_2d):
-
-            if len(boxes) == 0:
-                resized_boxes.append(boxes)
-                if gt_bboxes_ignore is not None:
-                    resized_ignore.append(gt_bboxes_ignore[i])
-                continue
-
-            scale = scale_factors[i]  # [w_scale, h_scale, w_scale, h_scale]
-            resized_boxes.append(boxes * scale)
-
-            if gt_bboxes_ignore is not None:
-                resized_ignore.append(gt_bboxes_ignore[i] * scale)
-
-        results['gt_bboxes_2d'] = resized_boxes
-
-        if gt_bboxes_ignore is not None:
-            results['gt_bboxes_ignore'] = resized_ignore
-
-
-
-
-
-@PIPELINES.register_module()
 class ResizeCropFlipImage(object):
     """Random resize, Crop and flip the image
     Args:
@@ -636,7 +591,7 @@ class ResizeCropFlipImageMono(ResizeCropFlipImage):
 
         results["img"] = new_imgs
         results['lidar2img'] = [results['intrinsics'][i] @ results['extrinsics'][i].T for i in
-                                range(len(results['extrinsics']))] # .T
+                                range(len(results['extrinsics']))]
 
         if self.with_bbox_2d:
             gt_bboxes_2d = results['gt_bboxes_2d']
@@ -653,9 +608,8 @@ class ResizeCropFlipImageMono(ResizeCropFlipImage):
                 bboxes_2d_to_3d = gt_bboxes_2d_to_3d[i]
                 bboxes_ignore = gt_bboxes_ignore[i]
                 # 1. resize
-                resize_2 = (0.8, 0.5689, 0.8, 0.5689) # TODO: dont hardcode!!
-                bboxes_2d = bboxes_2d * resize_2
-                bboxes_ignore = bboxes_ignore * resize_2
+                bboxes_2d = bboxes_2d * resize
+                bboxes_ignore = bboxes_ignore * resize
                 # 2. crop and filter out-of-image bboxes
                 bboxes_2d[:, 0::2] = np.clip(bboxes_2d[:, 0::2], crop[0], crop[2])
                 bboxes_2d[:, 1::2] = np.clip(bboxes_2d[:, 1::2], crop[1], crop[3])

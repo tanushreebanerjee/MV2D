@@ -12,6 +12,7 @@ from .core.bbox.coders.nms_free_coder import NMSFreeCoder
 from .core.bbox.match_costs import BBox3DL1Cost
 from .datasets import CustomNuScenesDataset
 from .datasets import CustomWaymoDataset
+from .datasets import CustomKittiDataset
 # from .datasets.pipelines import PhotoMetricDistortionMultiViewImage
 from .models.roi_heads import MV2DHead, MV2DTHead
 from .models.detectors import MV2D
